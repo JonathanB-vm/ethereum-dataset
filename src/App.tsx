@@ -11,6 +11,7 @@ import { DataTable } from './features/table/DataTable'
 import { Tabs, type TabId } from './features/table/Tabs'
 import { ExportButton } from './features/export/ExportButton'
 import { GlobalSearchInput } from './components/GlobalSearchInput'
+import { DictionaryButton, DictionaryPanelProvider } from './features/dictionary/DictionaryPanel'
 
 interface LoadState {
   status: 'loading' | 'error' | 'ready'
@@ -109,40 +110,50 @@ function App() {
   }, [state.result, activeTab])
 
   return (
-    <div className="app-shell">
-      <Header
-        blockNumber={latest?.block_number ?? null}
-        blockTime={latest ? formatTimestamp(latest.block_timestamp) : null}
-      >
-        {state.status === 'ready' && (
-          <GlobalSearchInput ref={searchInputRef} value={globalFilter} onChange={setGlobalFilter} />
-        )}
-      </Header>
-      {state.status === 'ready' && stats && <StatsBand stats={stats} />}
-      <main className="app-main">
-        {state.status === 'loading' && <p className="app-state">Loading dataset…</p>}
-        {state.status === 'error' && (
-          <p className="app-state app-state--error">Failed to load dataset: {state.error}</p>
-        )}
-        {state.status === 'ready' && state.result && (
-          <div className="table-card">
-            <div className="table-toolbar">
-              <Tabs active={activeTab} onChange={setActiveTab} counts={tabCounts} />
-              {table && latest && (
-                <ExportButton table={table} tab={activeTab} blockNumber={latest.block_number} />
-              )}
+    // Wraps the whole shell (not just <main>) since the "Data dictionary" button lives in
+    // Header's actions slot while every column ⓘ trigger lives deep inside DataTable — both
+    // need the same context. `records` is the full loaded dataset (not `tabRecords`), so a
+    // field's live stats don't change depending on which tab happened to be open when its
+    // ⓘ was clicked.
+    <DictionaryPanelProvider records={state.result?.records ?? []}>
+      <div className="app-shell">
+        <Header
+          blockNumber={latest?.block_number ?? null}
+          blockTime={latest ? formatTimestamp(latest.block_timestamp) : null}
+        >
+          {state.status === 'ready' && (
+            <>
+              <GlobalSearchInput ref={searchInputRef} value={globalFilter} onChange={setGlobalFilter} />
+              <DictionaryButton />
+            </>
+          )}
+        </Header>
+        {state.status === 'ready' && stats && <StatsBand stats={stats} />}
+        <main className="app-main">
+          {state.status === 'loading' && <p className="app-state">Loading dataset…</p>}
+          {state.status === 'error' && (
+            <p className="app-state app-state--error">Failed to load dataset: {state.error}</p>
+          )}
+          {state.status === 'ready' && state.result && (
+            <div className="table-card">
+              <div className="table-toolbar">
+                <Tabs active={activeTab} onChange={setActiveTab} counts={tabCounts} />
+                {table && latest && (
+                  <ExportButton table={table} tab={activeTab} blockNumber={latest.block_number} />
+                )}
+              </div>
+              <DataTable
+                records={tabRecords}
+                tab={activeTab}
+                onTableReady={handleTableReady}
+                globalFilter={globalFilter}
+                onGlobalFilterChange={setGlobalFilter}
+              />
             </div>
-            <DataTable
-              records={tabRecords}
-              tab={activeTab}
-              onTableReady={handleTableReady}
-              globalFilter={globalFilter}
-              onGlobalFilterChange={setGlobalFilter}
-            />
-          </div>
-        )}
-      </main>
-    </div>
+          )}
+        </main>
+      </div>
+    </DictionaryPanelProvider>
   )
 }
 

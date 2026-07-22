@@ -8,8 +8,11 @@ interface SortableHeaderProps {
 
 /**
  * Shared header renderer for every column: label + a sort indicator (accent when this
- * column is the active sort) + a reserved slot for the ⓘ description affordance Task 10
- * wires up. Reserving the slot now means Task 10 doesn't reflow every header.
+ * column is the active sort). The ⓘ description affordance this used to reserve empty
+ * space for is now a real sibling button (`DictionaryInfoTrigger`, rendered by
+ * `columns.tsx`'s `header()` inside the shared `.col-header-cell` flex row) rather than
+ * living inside this element — nesting an interactive button inside this sort `<button>`
+ * would be invalid HTML.
  */
 export function SortableHeader({ label, column }: SortableHeaderProps) {
   const sorted = column.getIsSorted()
@@ -23,7 +26,6 @@ export function SortableHeader({ label, column }: SortableHeaderProps) {
       <span className="col-header__sort" aria-hidden="true">
         {sorted === 'asc' ? '▲' : sorted === 'desc' ? '▼' : '↕'}
       </span>
-      <span className="col-header__info-slot" />
     </button>
   )
 }

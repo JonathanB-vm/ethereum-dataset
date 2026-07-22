@@ -1,0 +1,315 @@
+/* ---------- "Data dictionary" trigger (header actions slot) ---------- */
+
+.dictionary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.dictionary-button:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--bg-inset);
+}
+
+/* ---------- backdrop + slide-over panel ---------- */
+
+.dictionary-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(4, 6, 10, 0.5);
+  animation: dictionary-fade 0.15s ease;
+}
+
+@keyframes dictionary-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.dictionary-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 21;
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 100vw);
+  max-width: 420px;
+  height: 100%;
+  background: var(--bg-raised);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-raised);
+  animation: dictionary-slide-in 0.18s ease;
+}
+
+@keyframes dictionary-slide-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dictionary-backdrop,
+  .dictionary-panel {
+    animation: none;
+  }
+}
+
+.dictionary-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+  padding: 16px 16px 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dictionary-panel__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.dictionary-panel__close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.dictionary-panel__close:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--bg-inset);
+}
+
+.dictionary-panel__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+/* ---------- source badges ---------- */
+/* token_transfers -> accent, transactions -> positive, both/derived -> muted, per the brief. */
+
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.source-badge--accent {
+  color: var(--accent);
+  background: var(--accent-muted);
+}
+
+.source-badge--positive {
+  color: var(--positive);
+  background: color-mix(in srgb, var(--positive) 14%, transparent);
+}
+
+.source-badge--muted {
+  color: var(--text-muted);
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+}
+
+/* ---------- single-field mode ---------- */
+
+.dictionary-field__meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dictionary-field__kind {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dictionary-field__description {
+  margin: 12px 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.dictionary-field__name {
+  display: inline-block;
+  margin-bottom: 18px;
+  padding: 3px 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  background: var(--bg-inset);
+  border-radius: var(--radius-sm);
+}
+
+.dictionary-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+
+.dictionary-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dictionary-stat__label {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.dictionary-stat__value {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.dictionary-stat__value--mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+/* ---------- fill-rate bar (mark spec shared with StatsBand's proportion bar) ---------- */
+
+.fill-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 110px;
+}
+
+.fill-bar__track {
+  flex: 1;
+  display: block;
+  height: 6px;
+  background: var(--bg-inset);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.fill-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.fill-bar__pct {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+/* ---------- full-dictionary mode ---------- */
+
+.dictionary-full {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.dictionary-group__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.dictionary-group__count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.dictionary-group__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dictionary-entry {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.dictionary-group__list li:last-child {
+  border-bottom: none;
+}
+
+.dictionary-entry__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dictionary-entry__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.dictionary-entry__field {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.dictionary-entry__description {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}

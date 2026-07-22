@@ -2,6 +2,7 @@ import { createColumnHelper, type Column, type ColumnDef, type SortingFn } from 
 import { getColumnMeta, COLUMNS, type ColumnMeta } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 import { compareNumericStrings } from '../../data/transform'
+import { DictionaryInfoTrigger } from '../dictionary/DictionaryPanel'
 import { SortableHeader } from './SortableHeader'
 import { FilterControls } from './FilterControls'
 import type { TabId } from './Tabs'
@@ -94,6 +95,7 @@ function header(field: keyof EthRecord, label?: string, rangeUnit?: string) {
   return ({ column }: { column: Column<EthRecord, unknown> }) => (
     <div className="col-header-cell">
       <SortableHeader label={displayLabel} column={column} />
+      <DictionaryInfoTrigger field={field} label={displayLabel} />
       {meta && filterFn && (
         <FilterControls column={column} kind={meta.kind} label={displayLabel} rangeUnit={rangeUnit} />
       )}

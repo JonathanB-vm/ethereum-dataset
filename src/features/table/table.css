@@ -137,11 +137,32 @@
   color: var(--accent);
 }
 
-/* Reserved space for Task 10's ⓘ description affordance — kept empty here so its
-   introduction doesn't reflow every header column. */
-.col-header__info-slot {
-  width: 12px;
+/* ⓘ description affordance — opens DictionaryPanel in single-column mode for this field
+   (see columns.tsx's header() + DictionaryInfoTrigger). Sits as its own sibling button in
+   `.col-header-cell` (not nested inside `.col-header`, which is itself a `<button>` — a
+   button-in-button would be invalid HTML) between the sort control and the filter trigger. */
+.col-header__info {
+  display: grid;
+  place-items: center;
   flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  text-transform: none;
+  color: var(--text-faint);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.col-header__info:hover {
+  color: var(--accent);
+  border-color: var(--border-strong);
+  background: var(--bg-inset);
 }
 
 /* ---------- per-column filter popover ---------- */
@@ -571,4 +592,130 @@ tr:hover .copy-btn,
   color: var(--text-faint);
   cursor: default;
   opacity: 0.5;
+}
+
+/* ---------- row expansion (chevron + RowDetail) ---------- */
+/* The chevron is rendered directly by DataTable.tsx (not a TanStack ColumnDef) so it never
+   shows up in `table.getVisibleLeafColumns()` — keeping ExportButton's CSV column list and
+   FilterChips exactly the 35 dictionary fields, untouched by this task. */
+
+.row-expander-header {
+  width: 32px;
+}
+
+/* Specificity matched to (and placed after) `.data-table tbody td` on purpose, so this
+   overrides the general cell padding without an `!important`. */
+.data-table tbody td.row-expander-cell {
+  padding: 8px 0 8px 10px;
+  text-align: center;
+}
+
+.row-expander {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--text-faint);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+
+.row-expander:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--bg-inset);
+}
+
+.row-expander svg {
+  transition: transform 0.15s ease;
+}
+
+.row-expander--open {
+  color: var(--accent);
+}
+
+.row-expander--open svg {
+  transform: rotate(90deg);
+}
+
+/* Specificity matched to `.data-table tbody tr:last-child td` (and placed after it) so an
+   expanded row's own bottom border always shows, even when it's the last row on the page. */
+.data-table tbody tr.row-detail-row td {
+  padding: 0;
+  background: var(--bg-inset);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.row-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px 20px 22px 46px;
+}
+
+.row-detail__group-title {
+  margin: 0 0 10px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.row-detail__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px 24px;
+}
+
+.row-detail__field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.row-detail__field-label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.row-detail__field-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.row-detail__field-value--empty {
+  color: var(--text-faint);
+}
+
+.row-detail__field-raw {
+  overflow-wrap: anywhere;
+}
+
+/* Unlike the dense grid's hover-to-reveal copy buttons, this panel is a static, already-
+   expanded surface — the copy affordance stays visible so it doesn't require re-discovery. */
+.row-detail .copy-btn {
+  opacity: 1;
+}
+
+.row-detail__field-human {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
 }

@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import {
   flexRender,
   getCoreRowModel,
+  getExpandedRowModel,
   getFacetedUniqueValues,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
   type ColumnFiltersState,
+  type ExpandedState,
   type PaginationState,
   type SortingState,
   type Table,
@@ -17,6 +19,7 @@ import { customSortingFns, getColumnsForTab } from './columns'
 import { customFilterFns, tableGlobalFilterFn } from './filters'
 import { FilterChips } from './FilterChips'
 import { pageRange } from './pageRange'
+import { RowDetail } from './RowDetail'
 import type { TabId } from './Tabs'
 import './table.css'
 
@@ -46,6 +49,13 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
     pageSize: DEFAULT_PAGE_SIZE,
   })
   const [columnFiltersState, setColumnFiltersState] = useState<ColumnFiltersState>([])
+  // Which single row (if any) has its detail panel open, keyed by TanStack row id. A plain
+  // `Record<string, boolean>` (TanStack's `ExpandedState` shape) rather than a bare string
+  // so it plugs directly into `useReactTable`'s `state.expanded`/`onExpandedChange` — but
+  // `toggleRowExpanded` below always *replaces* it wholesale (never merges), which is what
+  // gives "only one row expanded at a time, replaced on toggle" instead of TanStack's
+  // default multi-row-expansion merge behavior.
+  const [expandedState, setExpandedState] = useState<ExpandedState>({})
 
   // Tab switch = a different column set, so sort/filter state from the old tab wouldn't
   // even apply cleanly (a sort — or a per-column filter — on "Quantity" makes no sense on
@@ -74,28 +84,43 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
     setSortingState([])
     setPaginationState((p) => ({ pageIndex: 0, pageSize: p.pageSize }))
     setColumnFiltersState([])
+    setExpandedState({})
   }
   const sorting = tabChanged ? [] : sortingState
   const pagination = tabChanged ? { pageIndex: 0, pageSize: paginationState.pageSize } : paginationState
   const columnFilters = tabChanged ? [] : columnFiltersState
+  const expanded = tabChanged ? {} : expandedState
 
   const table = useReactTable({
     data: records,
     columns,
-    state: { sorting, pagination, columnFilters, globalFilter },
+    state: { sorting, pagination, columnFilters, globalFilter, expanded },
     onSortingChange: setSortingState,
     onPaginationChange: setPaginationState,
     onColumnFiltersChange: setColumnFiltersState,
     onGlobalFilterChange,
+    onExpandedChange: setExpandedState,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
+    getExpandedRowModel: getExpandedRowModel(),
+    getRowCanExpand: () => true,
     sortingFns: customSortingFns,
     filterFns: customFilterFns,
     globalFilterFn: tableGlobalFilterFn,
   })
+
+  // Toggling calls `setExpandedState` directly (not `row.getToggleExpandedHandler()`,
+  // which merges into the existing object) — replacing wholesale is what enforces
+  // single-row expansion: clicking a second row's chevron closes the first.
+  function toggleRowExpanded(rowId: string) {
+    setExpandedState((prev) => {
+      const isOpen = typeof prev === 'object' && !!prev[rowId]
+      return isOpen ? {} : { [rowId]: true }
+    })
+  }
 
   // The table instance is a stable ref across re-renders (TanStack creates it once and
   // mutates its options in place) — this fires on mount and again if the instance itself
@@ -118,6 +143,10 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
+                {/* Chevron column: rendered directly here (not a TanStack ColumnDef) so it
+                    never appears in `table.getVisibleLeafColumns()` — ExportButton's CSV
+                    column list and FilterChips stay exactly the 35 dictionary fields. */}
+                <th className="row-expander-header" aria-hidden="true" />
                 {headerGroup.headers.map((h) => {
                   const sorted = h.column.getIsSorted()
                   const ariaSort = sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : undefined
@@ -133,18 +162,41 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td className="data-table__empty" colSpan={columns.length}>
+                <td className="data-table__empty" colSpan={columns.length + 1}>
                   No records match this view.
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
-                <tr key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
-                  ))}
-                </tr>
-              ))
+              rows.map((row) => {
+                const isExpanded = row.getIsExpanded()
+                return (
+                  <Fragment key={row.id}>
+                    <tr>
+                      <td className="row-expander-cell">
+                        <button
+                          type="button"
+                          className={`row-expander${isExpanded ? ' row-expander--open' : ''}`}
+                          onClick={() => toggleRowExpanded(row.id)}
+                          aria-expanded={isExpanded}
+                          aria-label={isExpanded ? 'Collapse row details' : 'Expand row details'}
+                        >
+                          <ChevronIcon />
+                        </button>
+                      </td>
+                      {row.getVisibleCells().map((cell) => (
+                        <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                      ))}
+                    </tr>
+                    {isExpanded && (
+                      <tr className="row-detail-row">
+                        <td colSpan={columns.length + 1}>
+                          <RowDetail record={row.original} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })
             )}
           </tbody>
         </table>
@@ -192,5 +244,13 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
         </div>
       </div>
     </div>
+  )
+}
+
+function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="12" height="12" fill="none" aria-hidden="true">
+      <path d="M5.5 3.5l5 4.5-5 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }

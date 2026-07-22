@@ -1,7 +1,7 @@
 # Ethereum Dataset Explorer
 
 A single-page explorer for a snapshot of Ethereum mainnet activity: token transfers and
-transactions around block **25,534,300**, browsable in a sortable, filterable data table
+transactions at block **25,534,300**, browsable in a sortable, filterable data table
 with live dataset statistics, a full data dictionary, and CSV export.
 
 ## Dataset provenance
@@ -43,7 +43,9 @@ npm run preview   # serve the production build
   description) with live per-column stats: fill rate, distinct count, min/max. Every
   column header's ⓘ opens the same panel scoped to that field.
 - **CSV export** — the current view (filtered + sorted, all pages) as CSV: either the
-  visible columns or all 35, with lossless numeric strings.
+  visible columns or all 35, with lossless numeric strings. Exports are value-lossless
+  but format-normalized: numeric `.0` suffixes from the source CSV aren't reproduced, and
+  line endings may differ from the original file.
 - **Dual theme** — dark (default) and light, persisted across reloads.
 
 ## Architecture
@@ -72,6 +74,6 @@ stats) is derived from the loaded records at runtime, never hard-coded.
 
 ## Testing
 
-`npm test` runs 11 Vitest suites (96 tests) covering the dictionary, CSV parsing and
-row validation, BigInt transforms, dataset/column stats, filter functions, pagination
+`npm test` runs unit tests across 11 Vitest suites covering the dictionary, CSV parsing
+and row validation, BigInt transforms, dataset/column stats, filter functions, pagination
 ranges, column definitions, and CSV export.

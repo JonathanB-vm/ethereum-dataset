@@ -25,7 +25,9 @@ const HUMAN_READABLE: Partial<Record<keyof EthRecord, (raw: string) => string | 
 
 function rawString(value: unknown): string | null {
   if (value == null || value === '') return null
-  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  // 'True'/'False' (not JS's lowercase toString) to match the CSV, export, and enum filter
+  // labels' capitalization — one convention across every surface that shows the stored value.
+  if (typeof value === 'boolean') return value ? 'True' : 'False'
   return String(value)
 }
 

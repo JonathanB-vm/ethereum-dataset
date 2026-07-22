@@ -93,7 +93,10 @@ export function BadgeCell({ label }: BadgeCellProps) {
  */
 export function RawCell({ value }: { value: unknown }) {
   if (value == null || value === '') return <NullCell />
-  const str = String(value)
+  // Booleans render as 'True'/'False' (not JS's lowercase toString) to match the CSV,
+  // export, and enum filter labels' capitalization — one convention across every surface
+  // that shows the stored value.
+  const str = typeof value === 'boolean' ? (value ? 'True' : 'False') : String(value)
   const display = str.length > 24 ? truncateHex(str, 10, 6) : str
   return (
     <span className="raw-cell" title={str}>

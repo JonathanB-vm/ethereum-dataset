@@ -58,7 +58,7 @@ describe('getColumnsForTab', () => {
     ])
   })
 
-  it("attaches the 'bignum' sortingFn to quantity, value_lossless_tx, and gas_price_tx only", () => {
+  it("attaches the 'bignum' sortingFn to quantity, token_id, value_lossless_tx, and gas_price_tx", () => {
     const byField = (defs: ReturnType<typeof getColumnsForTab>, field: keyof EthRecord) =>
       defs.find((d) => 'accessorKey' in d && d.accessorKey === field)
 
@@ -69,14 +69,30 @@ describe('getColumnsForTab', () => {
     const gasLimit = byField(getColumnsForTab('transactions'), 'gas_tx')
 
     expect(quantity?.sortingFn).toBe('bignum')
+    // token_id is also a bignum-kind field (a big-number STRING) — it must sort via the
+    // BigInt-aware comparator too, not TanStack's default alphanumeric fallback.
+    expect(tokenId?.sortingFn).toBe('bignum')
     expect(valueEth?.sortingFn).toBe('bignum')
     expect(gasPrice?.sortingFn).toBe('bignum')
 
-    // Negative check: a neighboring bignum-*kind* field (token_id) and a plain number
-    // field (gas_tx) must NOT have picked up 'bignum' just by being adjacent/similar —
-    // it's only wired for the three columns the brief calls out.
-    expect(tokenId?.sortingFn).toBeUndefined()
+    // Negative check: a plain number field (gas_tx) must NOT have picked up 'bignum' — it's
+    // a real JS number under the hood, so the default sort is already correct for it.
     expect(gasLimit?.sortingFn).toBeUndefined()
+  })
+
+  it("'all' tab: every column whose dictionary kind is 'bignum' carries sortingFn 'bignum', and no other column does", () => {
+    const defs = getColumnsForTab('all')
+    const byField = (field: keyof EthRecord) => defs.find((d) => 'accessorKey' in d && d.accessorKey === field)
+    const expectedBignumFields = new Set(COLUMNS.filter((c) => c.kind === 'bignum').map((c) => c.field))
+
+    for (const meta of COLUMNS) {
+      const def = byField(meta.field)
+      if (expectedBignumFields.has(meta.field)) {
+        expect(def?.sortingFn, `${String(meta.field)} (kind: bignum) should sort via 'bignum'`).toBe('bignum')
+      } else {
+        expect(def?.sortingFn, `${String(meta.field)} (kind: ${meta.kind}) should not sort via 'bignum'`).toBeUndefined()
+      }
+    }
   })
 })
 

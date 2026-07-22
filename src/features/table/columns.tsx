@@ -155,6 +155,7 @@ const transferColumns: ColumnDef<EthRecord>[] = [
   helper.accessor('token_id', {
     header: header('transfers', 'token_id'),
     cell: (info) => <BigNumCell value={info.getValue()} />,
+    sortingFn: 'bignum',
     filterFn: filterFor('token_id'),
   }),
   helper.accessor('event_index', {
@@ -241,6 +242,7 @@ const allColumns: ColumnDef<EthRecord>[] = COLUMNS.map((meta) =>
   helper.accessor(meta.field, {
     header: header('all', meta.field),
     cell: (info) => <RawCell value={info.getValue()} />,
+    sortingFn: meta.kind === 'bignum' ? 'bignum' : undefined,
     filterFn: filterFor(meta.field),
   }),
 ) as ColumnDef<EthRecord>[]

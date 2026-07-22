@@ -1,0 +1,321 @@
+/* ---------- table card shell ---------- */
+/* App.tsx wraps <Tabs> + <DataTable> in one `.table-card` so the tab strip, grid, and
+   footer read as a single instrument rather than three stacked widgets. */
+
+.table-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* ---------- tabs ---------- */
+
+.table-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
+  overflow-x: auto;
+  background: var(--bg-inset);
+  border-bottom: 1px solid var(--border);
+}
+
+.table-tab {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: none;
+  padding: 12px 12px 10px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.table-tab:hover {
+  color: var(--text);
+}
+
+.table-tab--active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.table-tab__count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.table-tab--active .table-tab__count {
+  color: var(--accent);
+}
+
+/* ---------- scroll region + sticky head ---------- */
+/* This one element owns both scroll axes: horizontal for the 35-column "All Records"
+   tab, vertical (capped height) so the header can stick without the whole page scrolling
+   past it. The page itself never gains horizontal scroll — it's contained here. */
+
+.table-scroll {
+  overflow: auto;
+  max-height: min(620px, calc(100vh - 420px));
+}
+
+.data-table {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border-strong);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.col-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 10px 14px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.col-header:hover {
+  color: var(--text);
+}
+
+.col-header--active {
+  color: var(--text);
+}
+
+.col-header__sort {
+  font-size: 9px;
+  color: var(--text-faint);
+}
+
+.col-header--active .col-header__sort {
+  color: var(--accent);
+}
+
+/* Reserved space for Task 10's ⓘ description affordance — kept empty here so its
+   introduction doesn't reflow every header column. */
+.col-header__info-slot {
+  width: 12px;
+  flex: none;
+}
+
+.data-table tbody td {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody tr:hover td {
+  background: var(--bg-inset);
+}
+
+.data-table__empty {
+  padding: 32px 16px;
+  text-align: center;
+  font-family: var(--font-ui);
+  color: var(--text-faint);
+}
+
+/* ---------- cell renderers ---------- */
+
+.cell-null {
+  display: block;
+  text-align: center;
+  color: var(--text-faint);
+}
+
+.hex-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hex-cell__text {
+  color: var(--text);
+}
+
+.time-cell {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.num-cell {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.num-cell--faint {
+  color: var(--text-faint);
+}
+
+.num-cell__unit {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.raw-cell {
+  color: var(--text-muted);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-muted);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* Copy button — hidden until the row is hovered/focused, so the grid stays quiet at rest. */
+
+.copy-btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--text-faint);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
+}
+
+tr:hover .copy-btn,
+.copy-btn:focus-visible {
+  opacity: 1;
+}
+
+.copy-btn:hover {
+  color: var(--text);
+  background: var(--bg);
+  border-color: var(--border-strong);
+}
+
+.copy-btn--copied,
+.copy-btn--copied:hover {
+  opacity: 1;
+  color: var(--positive);
+  border-color: var(--positive);
+  background: transparent;
+}
+
+/* ---------- footer: pagination ---------- */
+
+.table-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+}
+
+.table-footer__status {
+  font-variant-numeric: tabular-nums;
+}
+
+.table-footer__pager {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.table-footer__size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-footer__size select {
+  padding: 4px 6px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.table-footer__page-pos {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.table-footer__page-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.table-footer__page-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--bg-inset);
+}
+
+.table-footer__page-btn:disabled {
+  color: var(--text-faint);
+  cursor: default;
+  opacity: 0.5;
+}

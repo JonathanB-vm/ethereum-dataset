@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { Table } from '@tanstack/react-table'
 import { Header } from './components/Header'
 import { csvProvider } from './data/csvProvider'
 import type { LoadResult } from './data/provider'
@@ -6,6 +7,8 @@ import type { EthRecord } from './data/types'
 import { formatTimestamp } from './data/transform'
 import { StatsBand } from './features/stats/StatsBand'
 import { computeStats } from './features/stats/computeStats'
+import { DataTable } from './features/table/DataTable'
+import { Tabs, type TabId } from './features/table/Tabs'
 
 interface LoadState {
   status: 'loading' | 'error' | 'ready'
@@ -24,6 +27,10 @@ function latestBlock(records: EthRecord[]): EthRecord | null {
 
 function App() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
+  const [activeTab, setActiveTab] = useState<TabId>('transfers')
+  // Task 9 (export + filter chips) reaches the live table through this — DataTable
+  // reports its instance up via onTableReady, this is where it lands.
+  const tableRef = useRef<Table<EthRecord> | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -52,6 +59,26 @@ function App() {
     [state.result],
   )
 
+  // Tab counts are always derived from the loaded records, never hard-coded.
+  const tabCounts = useMemo<Record<TabId, number>>(() => {
+    const records = state.result?.records ?? []
+    const transfers = records.reduce((n, r) => n + (r.is_token_transfer ? 1 : 0), 0)
+    return { transfers, transactions: records.length - transfers, all: records.length }
+  }, [state.result])
+
+  // Tabs filter records before they ever reach DataTable — it only ever sees its own slice.
+  const tabRecords = useMemo(() => {
+    const records = state.result?.records ?? []
+    switch (activeTab) {
+      case 'transfers':
+        return records.filter((r) => r.is_token_transfer)
+      case 'transactions':
+        return records.filter((r) => !r.is_token_transfer)
+      case 'all':
+        return records
+    }
+  }, [state.result, activeTab])
+
   return (
     <div className="app-shell">
       <Header
@@ -65,13 +92,16 @@ function App() {
           <p className="app-state app-state--error">Failed to load dataset: {state.error}</p>
         )}
         {state.status === 'ready' && state.result && (
-          <p className="app-state">
-            Loaded {state.result.records.length.toLocaleString('en-US')} rows
-            {state.result.malformedCount > 0
-              ? ` (${state.result.malformedCount.toLocaleString('en-US')} skipped)`
-              : ''}
-            .
-          </p>
+          <div className="table-card">
+            <Tabs active={activeTab} onChange={setActiveTab} counts={tabCounts} />
+            <DataTable
+              records={tabRecords}
+              tab={activeTab}
+              onTableReady={(table) => {
+                tableRef.current = table
+              }}
+            />
+          </div>
         )}
       </main>
     </div>

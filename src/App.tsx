@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Table } from '@tanstack/react-table'
 import { Header } from './components/Header'
+import { ErrorState, LoadingState, MalformedNotice } from './components/States'
 import { csvProvider } from './data/csvProvider'
 import type { LoadResult } from './data/provider'
 import type { EthRecord } from './data/types'
@@ -30,6 +31,12 @@ function latestBlock(records: EthRecord[]): EthRecord | null {
 
 function App() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
+  // Bumping this re-runs the load effect below — Retry's whole job. Kept separate from
+  // `state` itself so a retry doesn't need to duplicate the effect's fetch/catch logic.
+  const [retryToken, setRetryToken] = useState(0)
+  // Reset per load (see the effect below) so a *new* load that's still malformed re-shows
+  // the notice even if the user dismissed it for a previous load.
+  const [malformedNoticeDismissed, setMalformedNoticeDismissed] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('transfers')
   // ExportButton (rendered next to Tabs, below) reaches the live table through this.
   // This is `useState`, not a plain ref: DataTable's `onTableReady` fires from inside a
@@ -52,6 +59,11 @@ function App() {
 
   useEffect(() => {
     let cancelled = false
+    // Re-running this effect (retryToken bump) starts from `loading` again — a retry after
+    // an error should show LoadingState, not leave the error (or a stale ready result) on
+    // screen while the new fetch is in flight.
+    setState({ status: 'loading' })
+    setMalformedNoticeDismissed(false)
     csvProvider()
       .load()
       .then((result) => {
@@ -65,7 +77,9 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [retryToken])
+
+  const handleRetry = useCallback(() => setRetryToken((t) => t + 1), [])
 
   // ⌘K / Ctrl-K focuses the global search input from anywhere on the page.
   useEffect(() => {
@@ -128,12 +142,19 @@ function App() {
             </>
           )}
         </Header>
+        {state.status === 'ready' &&
+          state.result &&
+          state.result.malformedCount > 0 &&
+          !malformedNoticeDismissed && (
+            <MalformedNotice
+              count={state.result.malformedCount}
+              onDismiss={() => setMalformedNoticeDismissed(true)}
+            />
+          )}
         {state.status === 'ready' && stats && <StatsBand stats={stats} />}
         <main className="app-main">
-          {state.status === 'loading' && <p className="app-state">Loading dataset…</p>}
-          {state.status === 'error' && (
-            <p className="app-state app-state--error">Failed to load dataset: {state.error}</p>
-          )}
+          {state.status === 'loading' && <LoadingState />}
+          {state.status === 'error' && <ErrorState message={state.error} onRetry={handleRetry} />}
           {state.status === 'ready' && state.result && (
             <div className="table-card">
               <div className="table-toolbar">

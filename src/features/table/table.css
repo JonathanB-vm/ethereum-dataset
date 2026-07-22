@@ -422,13 +422,6 @@
   background: var(--bg-inset);
 }
 
-.data-table__empty {
-  padding: 32px 16px;
-  text-align: center;
-  font-family: var(--font-ui);
-  color: var(--text-faint);
-}
-
 /* ---------- cell renderers ---------- */
 
 .cell-null {

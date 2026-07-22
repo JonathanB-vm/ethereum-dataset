@@ -14,6 +14,7 @@ import {
   type SortingState,
   type Table,
 } from '@tanstack/react-table'
+import { EmptyState } from '../../components/States'
 import type { EthRecord } from '../../data/types'
 import { customSortingFns, getColumnsForTab } from './columns'
 import { customFilterFns, tableGlobalFilterFn } from './filters'
@@ -134,6 +135,9 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
   const { pageIndex, pageSize } = table.getState().pagination
   const { from: rangeStart, to: rangeEnd } = pageRange(pageIndex, pageSize, totalRows)
   const pageCount = Math.max(1, table.getPageCount())
+  // Drives EmptyState's copy/action: "Clear filters" only makes sense — and only appears —
+  // when a filter is the reason the view is empty.
+  const hasActiveFilters = columnFilters.length > 0 || globalFilter.trim() !== ''
 
   return (
     <div id="table-panel" role="tabpanel" aria-labelledby={`table-tab-${tab}`}>
@@ -161,11 +165,14 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr>
-                <td className="data-table__empty" colSpan={columns.length + 1}>
-                  No records match this view.
-                </td>
-              </tr>
+              <EmptyState
+                colSpan={columns.length + 1}
+                hasActiveFilters={hasActiveFilters}
+                onClearFilters={() => {
+                  table.resetColumnFilters()
+                  table.setGlobalFilter('')
+                }}
+              />
             ) : (
               rows.map((row) => {
                 const isExpanded = row.getIsExpanded()

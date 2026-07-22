@@ -1,0 +1,274 @@
+/* ---------- shimmer skeleton primitive (shared by loading-state) ---------- */
+/* A solid `--border-strong` fill with a breathing opacity pulse — same idiom as the header's
+   `.block-badge__dot` "live" pulse — rather than a gradient sweep. Skeletons here sit on top
+   of both `--bg-raised` (tiles) and `--bg-inset` (toolbar) parents; a gradient that fades to
+   `--bg-inset` at its ends reads fine on a raised surface but nearly disappears on an inset
+   one, so a constant, always-contrasting base color is the more robust choice across both
+   parents and both themes. */
+
+.skeleton {
+  display: inline-block;
+  height: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--border-strong);
+  opacity: 0.45;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton--pill {
+  height: 14px;
+  border-radius: 999px;
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* ---------- loading state ---------- */
+/* `.loading-state__stats`/`__tile` intentionally mirror `.stats-band`/`.stat-tile`'s own
+   box model (padding, gap, grid) rather than reusing those classes directly — this stays
+   self-contained in one file instead of quietly depending on stats.css load order, at the
+   cost of the two needing to be kept in visual sync by hand. */
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.loading-state__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.loading-state__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 16px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.loading-state__table {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.loading-state__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  background: var(--bg-inset);
+  border-bottom: 1px solid var(--border);
+}
+
+.loading-state__toolbar-btn {
+  margin-left: auto;
+}
+
+.loading-state__grid {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 16px;
+}
+
+.loading-state__row {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.loading-state__row:last-child {
+  border-bottom: none;
+}
+
+.loading-state__row--head {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.loading-state__row .skeleton {
+  flex: none;
+}
+
+.loading-state__footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 720px) {
+  .loading-state__row {
+    gap: 16px;
+  }
+}
+
+/* ---------- error state ---------- */
+
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 420px;
+  margin: 64px auto;
+  padding: 24px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.error-state__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 4px;
+  color: var(--negative);
+  background: color-mix(in srgb, var(--negative) 14%, transparent);
+  border-radius: 999px;
+}
+
+.error-state__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.error-state__detail {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.error-state__retry {
+  margin-top: 6px;
+  padding: 8px 16px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.error-state__retry:hover {
+  filter: brightness(1.08);
+}
+
+/* ---------- empty state (in-table) ---------- */
+/* Specificity deliberately raised to beat `.data-table tbody td`'s own padding rule
+   (table.css) regardless of CSS module load order — same convention as that file's
+   `.row-expander-cell` override. */
+
+.data-table tbody td.empty-state {
+  padding: 40px 16px;
+  text-align: center;
+}
+
+.empty-state__icon {
+  display: grid;
+  place-items: center;
+  margin: 0 auto 12px;
+  color: var(--text-faint);
+}
+
+.empty-state__title {
+  margin: 0 0 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+.empty-state__clear {
+  padding: 6px 14px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.empty-state__clear:hover {
+  color: var(--text);
+  background: var(--bg-inset);
+}
+
+/* ---------- malformed-row notice ---------- */
+
+.malformed-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  background: var(--caution-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.malformed-notice__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--caution);
+}
+
+.malformed-notice__text {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.malformed-notice__dismiss {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.malformed-notice__dismiss:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--bg-raised);
+}

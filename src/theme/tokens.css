@@ -21,6 +21,8 @@
   --accent-muted: rgba(91, 141, 239, 0.14);
   --positive: #3fb68b;
   --negative: #e5636f;
+  --caution: #dba53c;
+  --caution-muted: rgba(219, 165, 60, 0.14);
 }
 
 :root[data-theme='light'] {
@@ -36,6 +38,8 @@
   --accent-muted: rgba(47, 107, 219, 0.1);
   --positive: #1e8e68;
   --negative: #c9414e;
+  --caution: #9c6a0c;
+  --caution-muted: rgba(156, 106, 12, 0.1);
 
   --shadow-raised: 0 1px 2px rgba(23, 28, 38, 0.06), 0 8px 24px rgba(23, 28, 38, 0.06);
 }

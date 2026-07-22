@@ -6,10 +6,59 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* Fills `.app-main`'s content box (index.css gives `.app-main` a definite height via
+     `flex: 1` inside the 100dvh shell) so `.table-panel`/`.table-scroll` below have real
+     space to flex into instead of the card just being as tall as its content. */
+  height: 100%;
   background: var(--bg-raised);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   overflow: hidden;
+}
+
+/* ---------- fullscreen mode (Task 13) ---------- */
+/* Toggled by the toolbar's expand/collapse button (App.tsx). Takes the whole card —
+   toolbar, chips, table, paginator together — out of the document and pins it over the
+   entire viewport. `z-index: 15` clears the sticky app header (10) but stays below the
+   dictionary slide-over (20/21, dictionary.css) so that panel still opens correctly on top
+   of a fullscreen table. `overflow: visible` (vs. the base rule's `hidden`, which exists
+   only to clip the card's own rounded corners) so a filter popover positioned near the
+   card's edge is never clipped by it once there's no corner left to protect. */
+.table-card--fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  padding: 20px;
+  background: var(--bg);
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+}
+
+/* ---------- toolbar: fullscreen toggle ---------- */
+/* Square icon button, same 30px footprint and idle/hover language as `.theme-toggle`
+   (index.css) — this sits in the same toolbar row as Tabs/ExportButton, not the header, but
+   reads as the same family of utility control. */
+.fullscreen-toggle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--text-muted);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.fullscreen-toggle:hover,
+.fullscreen-toggle[aria-pressed='true'] {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--bg-inset);
 }
 
 /* ---------- tabs ---------- */
@@ -62,14 +111,34 @@
   color: var(--accent);
 }
 
-/* ---------- scroll region + sticky head ---------- */
-/* This one element owns both scroll axes: horizontal for the 35-column "All Records"
-   tab, vertical (capped height) so the header can stick without the whole page scrolling
-   past it. The page itself never gains horizontal scroll — it's contained here. */
+/* ---------- tabpanel: chips + scroll region + pinned footer ---------- */
+/* `#table-panel` (DataTable.tsx's tabpanel root — id stays for aria-labelledby, this class
+   drives layout) is itself a flex column so `.table-scroll` can flex to fill whatever
+   height `.table-card` has left after the toolbar, and `.table-footer` — no flex-grow of
+   its own — always lands directly after it. That's what keeps the paginator's on-screen
+   position identical regardless of page size or row count: it never moves because
+   `.table-scroll` absorbs all the size change internally (via its own overflow), not the
+   footer being pushed down the page. */
+.table-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
 
+/* This one element owns both scroll axes: horizontal for the 35-column "All Records" tab,
+   vertical so the sticky header can stick without the whole page scrolling past it. The
+   page itself never gains horizontal scroll — it's contained here. `flex: 1` replaces the
+   old `max-height: min(620px, calc(100vh - 420px))` cap — the region now grows to fill
+   whatever space `.table-card` actually has (full viewport height, minus chrome) instead of
+   stopping short at a guessed pixel ceiling. `min-height` is a floor, not a target: on a
+   very short viewport (chrome alone taller than the viewport minus this floor), the column
+   can no longer shrink further, so it — and then the whole page — overflows into an
+   ordinary document scroll rather than being crushed unreadably thin. */
 .table-scroll {
+  flex: 1;
+  min-height: 220px;
   overflow: auto;
-  max-height: min(620px, calc(100vh - 420px));
 }
 
 .data-table {
@@ -86,9 +155,20 @@
   z-index: 1;
   padding: 0;
   background: var(--bg-raised);
-  border-bottom: 1px solid var(--border-strong);
+  /* Anchors the header more firmly than the 1px body row rule below it (--border) — the
+     header reads as one instrument sitting above the data, not just another row. */
+  border-bottom: 2px solid var(--border-strong);
   text-align: left;
   white-space: nowrap;
+}
+
+/* Column separators — one per header cell (including after the chevron spacer column, so
+   the expand-toggle area reads as its own group too), skipped after the last real column
+   since there's nothing further right to divide from. Each header cell packs a sort
+   button + ⓘ + filter trigger into one flex row (`.col-header-cell` below); without a
+   dividing line those three tiny controls from adjacent columns visually run together. */
+.data-table thead th:not(:last-child) {
+  border-right: 1px solid var(--border-strong);
 }
 
 /* Header cell = the sort button (.col-header) + the per-column filter popover
@@ -122,6 +202,10 @@
 
 .col-header:hover {
   color: var(--text);
+  /* A fill, not just a color change — makes the sort button's whole hit area read as
+     clickable at a glance, matching the filled-hover affordance the filter/info triggers
+     next to it already have. */
+  background: var(--bg-inset);
 }
 
 .col-header--active {
@@ -412,6 +496,16 @@
   padding: 8px 14px;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
+}
+
+/* All Records tab only (`data-table--dense`, DataTable.tsx) — 35 raw columns packed
+   edge-to-edge is the one view dense enough that a faint column rule actually helps reading
+   across a row; the two curated tabs (9–10 columns each) read fine without it, so this
+   stays off there rather than adding a rule everywhere "for consistency". Faint (--border,
+   not --border-strong) since these are just reading guides, not the header's own
+   button-group separators. */
+.data-table--dense tbody td:not(:last-child) {
+  border-right: 1px solid var(--border);
 }
 
 .data-table tbody tr:last-child td {

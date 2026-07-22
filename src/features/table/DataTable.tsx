@@ -139,10 +139,10 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
   const hasActiveFilters = columnFilters.length > 0 || globalFilter.trim() !== ''
 
   return (
-    <div id="table-panel" role="tabpanel" aria-labelledby={`table-tab-${tab}`}>
+    <div id="table-panel" className="table-panel" role="tabpanel" aria-labelledby={`table-tab-${tab}`}>
       <FilterChips table={table} tab={tab} />
       <div className="table-scroll">
-        <table className="data-table">
+        <table className={`data-table${tab === 'all' ? ' data-table--dense' : ''}`}>
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>

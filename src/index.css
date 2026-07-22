@@ -9,11 +9,16 @@
 
 html {
   color-scheme: light dark;
+  height: 100%;
 }
 
+/* html/body/#root/.app-shell form one unbroken 100%-height chain so the shell below can
+   use `100dvh` (viewport-height) as its own definite size — that's what lets `.table-card`
+   and `.table-scroll` (table.css) size themselves off *it* instead of off document content,
+   which is the whole point of task 13's "spread to the bottom, pin the paginator" layout. */
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100%;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
@@ -21,6 +26,10 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+#root {
+  height: 100%;
 }
 
 h1,
@@ -72,15 +81,28 @@ button {
 }
 
 /* ---------- app shell ---------- */
-
+/* `100dvh` (not `100vh`) — the dynamic viewport unit shrinks with mobile browser chrome
+   (address bar etc.) instead of leaving a sliver permanently hidden behind it. This is the
+   shell's *only* fixed size; every child below either grows to fill it (`.app-main`) or is
+   sized by its own content (header/notice/stats band) — nothing here clips overflow, so a
+   viewport too short for the floors set further down (table.css's `.table-scroll`
+   min-height) still degrades to an ordinary scrolling document instead of crushing content
+   or clipping it unreadably. */
 .app-shell {
-  min-height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
 }
 
+/* `min-height: 0` overrides a flex item's default `min-height: auto` (= its content's
+   natural size), which is what actually lets this shrink to the space `flex: 1` computes
+   instead of forcing the whole page taller to fit table content — the same "floor moves
+   down to the innermost scroller" trick `.table-card`/`.table-scroll` (table.css) rely on.
+   `.table-card` fills this with `height: 100%` in ready state; loading/error states render
+   at their own natural height with the leftover space simply left blank below them. */
 .app-main {
   flex: 1;
+  min-height: 0;
   padding: 24px;
 }
 

@@ -9,6 +9,7 @@ import { formatTimestamp } from './data/transform'
 import { StatsBand } from './features/stats/StatsBand'
 import { computeStats } from './features/stats/computeStats'
 import { DataTable } from './features/table/DataTable'
+import { FullscreenToggle } from './features/table/FullscreenToggle'
 import { Tabs, type TabId } from './features/table/Tabs'
 import { ExportButton } from './features/export/ExportButton'
 import { GlobalSearchInput } from './components/GlobalSearchInput'
@@ -56,6 +57,54 @@ function App() {
   // controlled prop.
   const [globalFilter, setGlobalFilter] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // Task 13: table fullscreen mode. State lives here (not in DataTable/FullscreenToggle)
+  // because it toggles a class on `.table-card`, which wraps both the toolbar (where the
+  // toggle button sits) and DataTable — a sibling relationship, not parent/child.
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const fullscreenToggleRef = useRef<HTMLButtonElement>(null)
+
+  const exitFullscreen = useCallback(() => {
+    setIsFullscreen(false)
+    // Matches every other overlay in this app (filter popovers, export menu, dictionary
+    // panel): a keyboard-only close has nowhere else for focus to logically land, so it
+    // returns to the control that opened it.
+    fullscreenToggleRef.current?.focus()
+  }, [])
+
+  function handleFullscreenToggleClick() {
+    if (isFullscreen) exitFullscreen()
+    else setIsFullscreen(true)
+  }
+
+  // Esc exits fullscreen — but only when nothing "on top" of it already owns Esc. Filter
+  // popovers (FilterControls.tsx), the export menu (ExportButton.tsx), and the dictionary
+  // panel (DictionaryPanel.tsx) each register their own `document`-level Escape listener
+  // while open, and none of them call stopPropagation/preventDefault (nor could they
+  // meaningfully coordinate with a sibling listener if they did — these are independent
+  // `document.addEventListener('keydown', …)` calls, not a bubble chain). So on a single
+  // Escape press with e.g. a filter popover open, *both* that popover's listener and this
+  // one would otherwise fire — closing the popover *and* exiting fullscreen at once, which
+  // isn't what "Esc exits" should mean while something is still open on top. Checking for
+  // any currently-open dialog/menu (all three render with `role="dialog"` or `role="menu"`)
+  // right when this handler runs — synchronously inside the same keydown dispatch, before
+  // React has flushed their `setOpen(false)` — reads whether one is still in the DOM and,
+  // if so, defers: that Escape press closes the popover only, and a second press (nothing
+  // left open) is what exits fullscreen.
+  useEffect(() => {
+    if (!isFullscreen) return
+    document.body.style.overflow = 'hidden'
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      if (document.querySelector('[role="dialog"], [role="menu"]')) return
+      exitFullscreen()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = ''
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isFullscreen, exitFullscreen])
 
   useEffect(() => {
     let cancelled = false
@@ -156,12 +205,17 @@ function App() {
           {state.status === 'loading' && <LoadingState />}
           {state.status === 'error' && <ErrorState message={state.error} onRetry={handleRetry} />}
           {state.status === 'ready' && state.result && (
-            <div className="table-card">
+            <div className={`table-card${isFullscreen ? ' table-card--fullscreen' : ''}`}>
               <div className="table-toolbar">
                 <Tabs active={activeTab} onChange={setActiveTab} counts={tabCounts} />
                 {table && latest && (
                   <ExportButton table={table} tab={activeTab} blockNumber={latest.block_number} />
                 )}
+                <FullscreenToggle
+                  ref={fullscreenToggleRef}
+                  isFullscreen={isFullscreen}
+                  onToggle={handleFullscreenToggleClick}
+                />
               </div>
               <DataTable
                 records={tabRecords}

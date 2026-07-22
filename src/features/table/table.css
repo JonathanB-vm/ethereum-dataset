@@ -167,7 +167,13 @@
 .data-table {
   width: 100%;
   min-width: max-content;
-  border-collapse: collapse;
+  /* `separate` (not `collapse`) is what keeps the sticky header's borders — the column
+     separators and the 2px bottom rule — attached while scrolling: collapsed borders
+     belong to the table grid rather than the cell, so a stuck <th> leaves them behind.
+     With `border-spacing: 0` and only bottom/right borders ever set, the rendered layout
+     is otherwise identical (nothing doubles up). */
+  border-collapse: separate;
+  border-spacing: 0;
   font-family: var(--font-mono);
   font-size: 13px;
 }

@@ -9,6 +9,7 @@ export function ThemeToggle() {
       type="button"
       className="theme-toggle"
       aria-label="Toggle theme"
+      aria-pressed={theme === 'light'}
       title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
       onClick={toggle}
     >

@@ -44,12 +44,15 @@ function metaLabel(field: keyof EthRecord): string {
 // the dictionary's own (see transactionColumns below) — this is the single place both the
 // header cell and FilterChips.tsx read from, so a chip for `value_lossless_tx` says
 // "Value ETH" (what's actually on screen) rather than the dictionary's "Value (lossless)".
+// The overrides are tab-scoped: the All Records tab shows those same fields as raw wei
+// (RawCell, no unit conversion), so there the header/chip keeps the dictionary's own label.
 const DISPLAY_LABEL_OVERRIDES: Partial<Record<keyof EthRecord, string>> = {
   value_lossless_tx: 'Value ETH',
   gas_price_tx: 'Gas Price Gwei',
 }
 
-export function columnDisplayLabel(field: keyof EthRecord): string {
+export function columnDisplayLabel(field: keyof EthRecord, tab: TabId): string {
+  if (tab === 'all') return metaLabel(field)
   return DISPLAY_LABEL_OVERRIDES[field] ?? metaLabel(field)
 }
 
@@ -89,7 +92,7 @@ const helper = createColumnHelper<EthRecord>()
  * Min/Max inputs "(ETH)"/"(Gwei)" so the unit a bound is compared in is never a guess.
  */
 function header(field: keyof EthRecord, label?: string, rangeUnit?: string) {
-  const displayLabel = label ?? columnDisplayLabel(field)
+  const displayLabel = label ?? DISPLAY_LABEL_OVERRIDES[field] ?? metaLabel(field)
   const meta = getColumnMeta(field)
   const filterFn = meta ? filterFnForKind(meta.kind) : undefined
   return ({ column }: { column: Column<EthRecord, unknown> }) => (
@@ -227,11 +230,13 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
 // ---------- all-records tab ----------
 // Every one of the 35 dictionary columns, in CSV order, shown as raw (mono, truncated)
 // values — this tab is the "inspect the export as-is" escape hatch, so it deliberately
-// skips unit conversion and the curated tabs' friendly labels.
+// skips unit conversion and the curated tabs' friendly labels: `meta.label` is passed
+// explicitly so `header()` never falls back to DISPLAY_LABEL_OVERRIDES here (a "Value ETH"
+// header over raw-wei cells would misstate the unit by 10^18).
 
 const allColumns: ColumnDef<EthRecord>[] = COLUMNS.map((meta) =>
   helper.accessor(meta.field, {
-    header: header(meta.field),
+    header: header(meta.field, meta.label),
     cell: (info) => <RawCell value={info.getValue()} />,
     filterFn: filterFor(meta.field),
   }),

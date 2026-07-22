@@ -15,6 +15,7 @@ import {
   type Table,
 } from '@tanstack/react-table'
 import { EmptyState } from '../../components/States'
+import { formatCount as fmt } from '../../data/transform'
 import type { EthRecord } from '../../data/types'
 import { customSortingFns, getColumnsForTab } from './columns'
 import { customFilterFns, tableGlobalFilterFn } from './filters'
@@ -36,8 +37,6 @@ interface DataTableProps {
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100]
 const DEFAULT_PAGE_SIZE = 50
-
-const fmt = (n: number): string => n.toLocaleString('en-US')
 
 export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFilterChange }: DataTableProps) {
   // `getColumnsForTab` returns one of three module-level constant arrays, so its identity
@@ -141,7 +140,7 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
 
   return (
     <div id="table-panel" role="tabpanel" aria-labelledby={`table-tab-${tab}`}>
-      <FilterChips table={table} />
+      <FilterChips table={table} tab={tab} />
       <div className="table-scroll">
         <table className="data-table">
           <thead>

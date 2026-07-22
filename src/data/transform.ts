@@ -43,6 +43,11 @@ export function truncateHex(hex: string, lead = 6, tail = 4): string {
   return `${hex.slice(0, lead)}…${hex.slice(-tail)}`
 }
 
+/** Thousands-separated plain integer for UI copy (tab counts, row/page counts, tile values). */
+export function formatCount(n: number): string {
+  return n.toLocaleString('en-US')
+}
+
 export function formatBigInt(v: string | null): string | null {
   const b = toBigInt(v)
   if (b == null) return null

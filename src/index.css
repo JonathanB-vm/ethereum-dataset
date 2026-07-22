@@ -106,6 +106,12 @@ button {
   min-width: 0;
 }
 
+/* The title/subtitle wrapper must be allowed to shrink for the subtitle's ellipsis to
+   engage — a flex item's default min-width:auto would force the header wider instead. */
+.app-header__brand > div {
+  min-width: 0;
+}
+
 .app-header__logo {
   display: grid;
   place-items: center;
@@ -124,6 +130,8 @@ button {
   letter-spacing: -0.01em;
   color: var(--text);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .app-header__sub {
@@ -240,6 +248,34 @@ button {
 @media (max-width: 720px) {
   .global-search {
     width: 160px;
+  }
+}
+
+/* Narrow widths (~360–640px): the brand text, block badge, and actions can't share one
+   60px row without overlapping — let the header wrap into two rows (brand + badge on the
+   first, search/dictionary/theme actions on the second) instead of clipping. */
+@media (max-width: 640px) {
+  .app-header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 60px;
+    padding: 10px 16px;
+    gap: 8px 12px;
+  }
+
+  .app-header__actions {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+    /* Without this the row's automatic minimum (min-width: auto) resolves to the search
+       input's max-content width, overflowing the viewport instead of letting flex shrink. */
+    min-width: 0;
+  }
+
+  .global-search {
+    flex: 1;
+    width: auto;
+    min-width: 0;
   }
 }
 

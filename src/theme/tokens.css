@@ -16,7 +16,10 @@
   --border-strong: #2c3547;
   --text: #e6eaf2;
   --text-muted: #96a0b5;
-  --text-faint: #5c6678;
+  /* Tertiary text still carries real content (units, counts, field names), so it clears
+     WCAG 4.5:1 on every surface it sits on (4.74:1 on --bg-raised, the weakest) while
+     staying clearly below --text-muted's 6.94:1. */
+  --text-faint: #78829a;
   --accent: #5b8def;
   --accent-muted: rgba(91, 141, 239, 0.14);
   /* Text painted on top of a solid --accent fill (e.g. the primary Retry button). This
@@ -38,12 +41,17 @@
   --border-strong: #c9d0da;
   --text: #171c26;
   --text-muted: #5a6478;
-  --text-faint: #98a1b3;
-  --accent: #2f6bdb;
-  --accent-muted: rgba(47, 107, 219, 0.1);
-  /* This theme's --accent is dark/saturated enough that white passes 4.5:1 (~4.94:1). */
+  /* Same 4.5:1 floor as dark's --text-faint (4.77:1 on --bg-inset, the weakest surface);
+     light themes compress the muted/faint contrast range — hierarchy leans on size/weight. */
+  --text-faint: #5f6a80;
+  /* Deep enough that accent-on-accent-muted text (badges, filter chips) clears 4.5:1 over
+     both --bg-raised (5.21:1) and --bg-inset (4.57:1). */
+  --accent: #285dc9;
+  --accent-muted: rgba(40, 93, 201, 0.1);
+  /* This theme's --accent is dark/saturated enough that white passes 4.5:1 (~6.0:1). */
   --text-on-accent: #ffffff;
-  --positive: #1e8e68;
+  /* Dark enough that positive-badge text on its 14% tint clears 4.5:1 (4.82:1). */
+  --positive: #177252;
   --negative: #c9414e;
   --caution: #9c6a0c;
   --caution-muted: rgba(156, 106, 12, 0.1);

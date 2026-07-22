@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getColumnsForTab } from './columns'
+import { columnDisplayLabel, getColumnsForTab } from './columns'
 import { COLUMNS } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 
@@ -75,5 +75,22 @@ describe('getColumnsForTab', () => {
     // it's only wired for the three columns the brief calls out.
     expect(tokenId?.sortingFn).toBeUndefined()
     expect(gasLimit?.sortingFn).toBeUndefined()
+  })
+})
+
+describe('columnDisplayLabel', () => {
+  it('uses unit-specific labels on the transactions tab (cells are ETH/Gwei there)', () => {
+    expect(columnDisplayLabel('value_lossless_tx', 'transactions')).toBe('Value ETH')
+    expect(columnDisplayLabel('gas_price_tx', 'transactions')).toBe('Gas Price Gwei')
+  })
+
+  it("uses the raw dictionary labels on 'all' (cells are raw wei there)", () => {
+    expect(columnDisplayLabel('value_lossless_tx', 'all')).toBe('Value (lossless)')
+    expect(columnDisplayLabel('gas_price_tx', 'all')).toBe('Gas Price')
+  })
+
+  it('falls back to the dictionary label for non-overridden fields on every tab', () => {
+    expect(columnDisplayLabel('quantity', 'transfers')).toBe('Quantity')
+    expect(columnDisplayLabel('quantity', 'all')).toBe('Quantity')
   })
 })

@@ -1,12 +1,10 @@
-import { formatTimestamp } from '../../data/transform'
+import { formatCount as fmtInt, formatTimestamp } from '../../data/transform'
 import type { DatasetStats } from './computeStats'
 import './stats.css'
 
 interface StatsBandProps {
   stats: DatasetStats
 }
-
-const fmtInt = (n: number): string => n.toLocaleString('en-US')
 
 /** Two-segment proportion bar: tx (muted) vs transfers (accent). */
 function RecordsSplitBar({ txCount, transferCount }: { txCount: number; transferCount: number }) {

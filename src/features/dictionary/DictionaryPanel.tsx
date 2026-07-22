@@ -165,11 +165,35 @@ function FillBar({ value }: { value: number }) {
 
 export function DictionaryPanel({ records, field, onClose }: DictionaryPanelProps) {
   const closeBtnRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     closeBtnRef.current?.focus()
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      // Focus trap: aria-modal promises AT the background is inert, so keyboard focus must
+      // not tab out into it either — wrap at the panel's first/last focusable element.
+      if (e.key !== 'Tab' || !panelRef.current) return
+      const focusables = panelRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement
+      const inside = panelRef.current.contains(active)
+      if (e.shiftKey) {
+        if (active === first || !inside) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else if (active === last || !inside) {
+        e.preventDefault()
+        first.focus()
+      }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
@@ -181,6 +205,7 @@ export function DictionaryPanel({ records, field, onClose }: DictionaryPanelProp
   return (
     <div className="dictionary-backdrop" onClick={onClose}>
       <div
+        ref={panelRef}
         className="dictionary-panel"
         role="dialog"
         aria-modal="true"
@@ -257,6 +282,12 @@ function FieldDetail({ field, meta, records }: { field: keyof EthRecord; meta: C
 }
 
 function FullDictionary({ records }: { records: EthRecord[] }) {
+  // 35 fields × a full-dataset scan each — worth memoizing so re-renders of the open panel
+  // (e.g. parent state changes) don't recompute every column's stats from scratch.
+  const statsByField = useMemo(
+    () => new Map(COLUMNS.map((c) => [c.field, computeColumnStats(records, c.field)])),
+    [records],
+  )
   return (
     <div className="dictionary-full">
       {SOURCE_ORDER.map((source) => {
@@ -270,7 +301,7 @@ function FullDictionary({ records }: { records: EthRecord[] }) {
             </div>
             <ul className="dictionary-group__list">
               {fields.map((c) => {
-                const stats = computeColumnStats(records, c.field)
+                const stats = statsByField.get(c.field) ?? computeColumnStats(records, c.field)
                 return (
                   <li key={c.field} className="dictionary-entry">
                     <div className="dictionary-entry__row">

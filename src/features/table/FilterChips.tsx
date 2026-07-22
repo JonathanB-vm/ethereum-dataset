@@ -2,9 +2,13 @@ import type { Table } from '@tanstack/react-table'
 import type { EthRecord } from '../../data/types'
 import { columnDisplayLabel } from './columns'
 import type { RangeFilterValue } from './filters'
+import type { TabId } from './Tabs'
 
 interface FilterChipsProps {
   table: Table<EthRecord>
+  /** Chip labels are tab-scoped (see columnDisplayLabel): the same field can render under
+   *  a unit-specific header on the transactions tab but its raw dictionary label on 'all'. */
+  tab: TabId
 }
 
 /** Human-readable summary of an active column filter's value — shape tells us which kind it came from (array = enum, object = range, string = text). */
@@ -32,13 +36,13 @@ function formatFilterValue(value: unknown): string | null {
  * `columnFilters` state — see the comment there — so this re-renders on every filter
  * change without needing its own copy of that state).
  */
-export function FilterChips({ table }: FilterChipsProps) {
+export function FilterChips({ table, tab }: FilterChipsProps) {
   const { columnFilters, globalFilter } = table.getState()
 
   const columnChips = columnFilters
     .map((f) => ({
       id: f.id,
-      label: columnDisplayLabel(f.id as keyof EthRecord),
+      label: columnDisplayLabel(f.id as keyof EthRecord, tab),
       text: formatFilterValue(f.value),
     }))
     .filter((chip): chip is { id: string; label: string; text: string } => chip.text != null)

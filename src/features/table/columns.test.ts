@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import type { ReactElement } from 'react'
+import type { Column } from '@tanstack/react-table'
 import { columnDisplayLabel, getColumnsForTab } from './columns'
 import { COLUMNS } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
@@ -92,5 +94,40 @@ describe('columnDisplayLabel', () => {
   it('falls back to the dictionary label for non-overridden fields on every tab', () => {
     expect(columnDisplayLabel('quantity', 'transfers')).toBe('Quantity')
     expect(columnDisplayLabel('quantity', 'all')).toBe('Quantity')
+  })
+})
+
+/**
+ * Resolves the label a def's header renderer will *actually* display — not the
+ * columnDisplayLabel utility, but the real ColumnDef path: invoke the def's `header`
+ * function (safe with a stub column — it only creates elements, never reads the column
+ * until render) and read the `label` prop off the SortableHeader element it returns
+ * (the first child of the `.col-header-cell` wrapper).
+ */
+function headerLabel(tab: Parameters<typeof getColumnsForTab>[0], field: keyof EthRecord): string {
+  const def = getColumnsForTab(tab).find((d) => 'accessorKey' in d && d.accessorKey === field)
+  if (!def || typeof def.header !== 'function') {
+    throw new Error(`no function header for ${String(field)} on tab ${tab}`)
+  }
+  const el = def.header({ column: {} as Column<EthRecord, unknown> } as never) as ReactElement
+  const children = (el.props as { children: ReactElement[] }).children
+  return (children[0].props as { label: string }).label
+}
+
+describe('column-def header labels (the rendered path, not just the utility)', () => {
+  it('transactions defs render unit-specific labels for the two converted columns', () => {
+    expect(headerLabel('transactions', 'value_lossless_tx')).toBe('Value ETH')
+    expect(headerLabel('transactions', 'gas_price_tx')).toBe('Gas Price Gwei')
+  })
+
+  it("'all' defs render the raw dictionary labels for those same fields", () => {
+    expect(headerLabel('all', 'value_lossless_tx')).toBe('Value (lossless)')
+    expect(headerLabel('all', 'gas_price_tx')).toBe('Gas Price')
+  })
+
+  it('non-overridden fields render their dictionary label on every tab', () => {
+    expect(headerLabel('transfers', 'quantity')).toBe('Quantity')
+    expect(headerLabel('all', 'quantity')).toBe('Quantity')
+    expect(headerLabel('transactions', 'gas_tx')).toBe('Gas Limit')
   })
 })

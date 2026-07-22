@@ -86,13 +86,15 @@ const helper = createColumnHelper<EthRecord>()
 
 /**
  * Builds a header cell: sort control (SortableHeader) + filter popover (FilterControls),
- * driven by the field's dictionary `kind`. `rangeUnit` is only passed for the two
- * transactions-tab columns whose registered filterFn is the display-unit-aware
+ * driven by the field's dictionary `kind`. The label always routes through
+ * `columnDisplayLabel(field, tab)` — the single source of truth FilterChips also reads —
+ * so a header and its filter chip can never disagree. `rangeUnit` is only passed for the
+ * two transactions-tab columns whose registered filterFn is the display-unit-aware
  * `'rangeEth'`/`'rangeGwei'` (see columns below) — it tells FilterControls to label its
  * Min/Max inputs "(ETH)"/"(Gwei)" so the unit a bound is compared in is never a guess.
  */
-function header(field: keyof EthRecord, label?: string, rangeUnit?: string) {
-  const displayLabel = label ?? DISPLAY_LABEL_OVERRIDES[field] ?? metaLabel(field)
+function header(tab: TabId, field: keyof EthRecord, rangeUnit?: string) {
+  const displayLabel = columnDisplayLabel(field, tab)
   const meta = getColumnMeta(field)
   const filterFn = meta ? filterFnForKind(meta.kind) : undefined
   return ({ column }: { column: Column<EthRecord, unknown> }) => (
@@ -116,47 +118,47 @@ function filterFor(field: keyof EthRecord) {
 
 const transferColumns: ColumnDef<EthRecord>[] = [
   helper.accessor('block_timestamp', {
-    header: header('block_timestamp'),
+    header: header('transfers', 'block_timestamp'),
     cell: (info) => <TimeCell value={info.getValue()} />,
   }),
   helper.accessor('transaction_hash', {
-    header: header('transaction_hash'),
+    header: header('transfers', 'transaction_hash'),
     cell: (info) => <AddressCell value={info.getValue()} />,
     filterFn: filterFor('transaction_hash'),
   }),
   helper.accessor('event_type', {
-    header: header('event_type'),
+    header: header('transfers', 'event_type'),
     cell: (info) => <BadgeCell label={info.getValue()} />,
     filterFn: filterFor('event_type'),
   }),
   helper.accessor('address', {
-    header: header('address'),
+    header: header('transfers', 'address'),
     cell: (info) => <AddressCell value={info.getValue()} />,
     filterFn: filterFor('address'),
   }),
   helper.accessor('from_address', {
-    header: header('from_address'),
+    header: header('transfers', 'from_address'),
     cell: (info) => <AddressCell value={info.getValue()} />,
     filterFn: filterFor('from_address'),
   }),
   helper.accessor('to_address', {
-    header: header('to_address'),
+    header: header('transfers', 'to_address'),
     cell: (info) => <AddressCell value={info.getValue()} />,
     filterFn: filterFor('to_address'),
   }),
   helper.accessor('quantity', {
-    header: header('quantity'),
+    header: header('transfers', 'quantity'),
     cell: (info) => <BigNumCell value={info.getValue()} />,
     sortingFn: 'bignum',
     filterFn: filterFor('quantity'),
   }),
   helper.accessor('token_id', {
-    header: header('token_id'),
+    header: header('transfers', 'token_id'),
     cell: (info) => <BigNumCell value={info.getValue()} />,
     filterFn: filterFor('token_id'),
   }),
   helper.accessor('event_index', {
-    header: header('event_index'),
+    header: header('transfers', 'event_index'),
     cell: (info) => <NumberCell value={info.getValue()} />,
     filterFn: filterFor('event_index'),
   }),
@@ -166,37 +168,38 @@ const transferColumns: ColumnDef<EthRecord>[] = [
 
 const transactionColumns: ColumnDef<EthRecord>[] = [
   helper.accessor('block_timestamp', {
-    header: header('block_timestamp'),
+    header: header('transactions', 'block_timestamp'),
     cell: (info) => <TimeCell value={info.getValue()} />,
   }),
   helper.accessor('transaction_index', {
-    header: header('transaction_index'),
+    header: header('transactions', 'transaction_index'),
     cell: (info) => <NumberCell value={info.getValue()} />,
     filterFn: filterFor('transaction_index'),
   }),
   helper.accessor('transaction_hash', {
-    header: header('transaction_hash'),
+    header: header('transactions', 'transaction_hash'),
     cell: (info) => <AddressCell value={info.getValue()} />,
     filterFn: filterFor('transaction_hash'),
   }),
   helper.accessor('from_address_tx', {
-    header: header('from_address_tx'),
+    header: header('transactions', 'from_address_tx'),
     cell: (info) => <AddressCell value={info.getValue()} />,
     filterFn: filterFor('from_address_tx'),
   }),
   helper.accessor('to_address_tx', {
-    header: header('to_address_tx'),
+    header: header('transactions', 'to_address_tx'),
     cell: (info) => <AddressCell value={info.getValue()} />,
     filterFn: filterFor('to_address_tx'),
   }),
   helper.accessor('value_lossless_tx', {
-    // Uses the DISPLAY_LABEL_OVERRIDES entry ("Value ETH", not the dictionary's "Value
-    // (lossless)") — this column renders the wei value converted to ETH, so the header
-    // should say what's actually on screen. The filter has to match: 'rangeEth' (not the
-    // generic 'range' `filterFor` would give a bignum column) converts a typed ETH bound
-    // to wei before comparing, so "≥ 1" here means ≥ 1 ETH, matching what's displayed —
-    // not ≥ 1 wei, which off by 10^18 would make almost every bound a no-op.
-    header: header('value_lossless_tx', undefined, 'ETH'),
+    // columnDisplayLabel resolves this to the DISPLAY_LABEL_OVERRIDES entry ("Value ETH",
+    // not the dictionary's "Value (lossless)") — this column renders the wei value
+    // converted to ETH, so the header should say what's actually on screen. The filter
+    // has to match: 'rangeEth' (not the generic 'range' `filterFor` would give a bignum
+    // column) converts a typed ETH bound to wei before comparing, so "≥ 1" here means
+    // ≥ 1 ETH, matching what's displayed — not ≥ 1 wei, which off by 10^18 would make
+    // almost every bound a no-op.
+    header: header('transactions', 'value_lossless_tx', 'ETH'),
     cell: (info) => <EthValueCell value={info.getValue()} />,
     sortingFn: 'bignum',
     filterFn: 'rangeEth',
@@ -205,23 +208,23 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
     // Same reasoning as above — displayed in Gwei, not the dictionary's raw "Gas Price"
     // (wei), so its filter ('rangeGwei') converts a typed Gwei bound to wei (off by 10^9
     // if left as the generic 'range').
-    header: header('gas_price_tx', undefined, 'Gwei'),
+    header: header('transactions', 'gas_price_tx', 'Gwei'),
     cell: (info) => <GweiCell value={info.getValue()} />,
     sortingFn: 'bignum',
     filterFn: 'rangeGwei',
   }),
   helper.accessor('gas_tx', {
-    header: header('gas_tx'),
+    header: header('transactions', 'gas_tx'),
     cell: (info) => <NumberCell value={info.getValue()} />,
     filterFn: filterFor('gas_tx'),
   }),
   helper.accessor('nonce_tx', {
-    header: header('nonce_tx'),
+    header: header('transactions', 'nonce_tx'),
     cell: (info) => <NumberCell value={info.getValue()} />,
     filterFn: filterFor('nonce_tx'),
   }),
   helper.accessor('type_tx', {
-    header: header('type_tx'),
+    header: header('transactions', 'type_tx'),
     cell: (info) => <BadgeCell label={txTypeLabel(info.getValue())} />,
     filterFn: filterFor('type_tx'),
   }),
@@ -230,13 +233,13 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
 // ---------- all-records tab ----------
 // Every one of the 35 dictionary columns, in CSV order, shown as raw (mono, truncated)
 // values — this tab is the "inspect the export as-is" escape hatch, so it deliberately
-// skips unit conversion and the curated tabs' friendly labels: `meta.label` is passed
-// explicitly so `header()` never falls back to DISPLAY_LABEL_OVERRIDES here (a "Value ETH"
-// header over raw-wei cells would misstate the unit by 10^18).
+// skips unit conversion and the curated tabs' friendly labels: columnDisplayLabel('all')
+// never applies DISPLAY_LABEL_OVERRIDES (a "Value ETH" header over raw-wei cells would
+// misstate the unit by 10^18).
 
 const allColumns: ColumnDef<EthRecord>[] = COLUMNS.map((meta) =>
   helper.accessor(meta.field, {
-    header: header(meta.field, meta.label),
+    header: header('all', meta.field),
     cell: (info) => <RawCell value={info.getValue()} />,
     filterFn: filterFor(meta.field),
   }),

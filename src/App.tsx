@@ -4,6 +4,8 @@ import { csvProvider } from './data/csvProvider'
 import type { LoadResult } from './data/provider'
 import type { EthRecord } from './data/types'
 import { formatTimestamp } from './data/transform'
+import { StatsBand } from './features/stats/StatsBand'
+import { computeStats } from './features/stats/computeStats'
 
 interface LoadState {
   status: 'loading' | 'error' | 'ready'
@@ -45,12 +47,18 @@ function App() {
     [state.result],
   )
 
+  const stats = useMemo(
+    () => (state.result ? computeStats(state.result.records) : null),
+    [state.result],
+  )
+
   return (
     <div className="app-shell">
       <Header
         blockNumber={latest?.block_number ?? null}
         blockTime={latest ? formatTimestamp(latest.block_timestamp) : null}
       />
+      {state.status === 'ready' && stats && <StatsBand stats={stats} />}
       <main className="app-main">
         {state.status === 'loading' && <p className="app-state">Loading dataset…</p>}
         {state.status === 'error' && (

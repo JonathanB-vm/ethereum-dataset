@@ -64,4 +64,15 @@ describe('computeStats', () => {
     expect(s.gasPriceMinGwei).toBeNull()
     expect(s.totalEthMoved).toBe('0')
   })
+
+  // regression: transfer row with null tx fields precedes parent tx row
+  it('coalesces tx fields when the transfer row precedes the parent tx row', () => {
+    const s = computeStats([
+      mk({ transaction_hash: '0xa', is_token_transfer: true, value_lossless_tx: null, gas_price_tx: null }),
+      mk({ transaction_hash: '0xa', value_lossless_tx: '1000000000000000000', gas_price_tx: '2000000000' }),
+    ])
+    expect(s.totalEthMoved).toBe('1')
+    expect(s.gasPriceMinGwei).toBe('2')
+    expect(s.gasPriceMaxGwei).toBe('2')
+  })
 })

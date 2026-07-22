@@ -31,6 +31,8 @@ export function computeStats(records: EthRecord[]): DatasetStats {
   for (const r of records) {
     if (r.is_token_transfer) {
       transferCount++
+      // event_type is only ever populated on transfer rows (null on plain
+      // tx rows), so this only accumulates transfer-row counts.
       if (r.event_type != null) {
         eventTypeCountMap.set(r.event_type, (eventTypeCountMap.get(r.event_type) ?? 0) + 1)
       }
@@ -38,11 +40,18 @@ export function computeStats(records: EthRecord[]): DatasetStats {
       txCount++
     }
 
-    if (!txMap.has(r.transaction_hash)) {
+    const existing = txMap.get(r.transaction_hash)
+    if (!existing) {
       txMap.set(r.transaction_hash, {
         value: toBigInt(r.value_lossless_tx),
         gasPrice: toBigInt(r.gas_price_tx),
       })
+    } else {
+      // Coalesce: tx fields "may be null on transfer rows" (types.ts), and
+      // row order isn't guaranteed, so backfill nulls from later rows rather
+      // than locking in a null seen before the parent transaction row.
+      if (existing.value == null) existing.value = toBigInt(r.value_lossless_tx)
+      if (existing.gasPrice == null) existing.gasPrice = toBigInt(r.gas_price_tx)
     }
 
     if (r.address != null) addresses.add(r.address)
@@ -68,6 +77,8 @@ export function computeStats(records: EthRecord[]): DatasetStats {
     }
   }
 
+  // Array.prototype.sort is stable, so ties preserve first-seen insertion
+  // order from eventTypeCountMap rather than being arbitrarily reordered.
   const eventTypeCounts = Array.from(eventTypeCountMap, ([type, count]) => ({ type, count })).sort(
     (a, b) => b.count - a.count,
   )

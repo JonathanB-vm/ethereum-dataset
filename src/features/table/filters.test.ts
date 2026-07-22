@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { enumFilter, globalFilterFn, rangeFilter, textFilter } from './filters'
+import { customFilterFns, enumFilter, globalFilterFn, rangeFilter, textFilter } from './filters'
 import type { EthRecord } from '../../data/types'
+import type { Row } from '@tanstack/react-table'
 
 // UINT256_MAX — the top of the 256-bit numeric range these BigQuery numeric-string
 // columns (quantity, value_lossless_tx, gas_price_tx, …) can legally hold. Any filter
@@ -147,5 +148,66 @@ describe('globalFilterFn', () => {
   it('matches numeric and boolean fields too, not just strings', () => {
     const record = makeRecord({ block_number: 25534300, is_token_transfer: true })
     expect(globalFilterFn(record, '25534300')).toBe(true)
+  })
+})
+
+// `customFilterFns.rangeEth`/`rangeGwei` are the fix for the unit-mismatch bug: the
+// `value_lossless_tx` ("Value ETH") and `gas_price_tx` ("Gas Price Gwei") columns display
+// converted values but store raw wei, so their bounds must be converted from the display
+// unit to wei before `rangeFilter`'s ordinary wei-scale comparison runs — otherwise a
+// bound typed in ETH/Gwei is silently compared against wei and is off by 10^18 / 10^9.
+describe('customFilterFns.rangeEth / rangeGwei (display-unit-aware range filters)', () => {
+  // TanStack's FilterFn only ever calls `row.getValue(columnId)` here — a minimal stand-in
+  // is enough to exercise the adapter without spinning up a real `useReactTable` instance.
+  function fakeRow(value: string | null): Row<EthRecord> {
+    return { getValue: () => value } as unknown as Row<EthRecord>
+  }
+
+  // TanStack's `FilterFn` type takes a 4th `addMeta` callback none of these filters use —
+  // this just supplies a no-op so the call sites below match the real signature exactly.
+  const noopAddMeta = () => {}
+  function rangeEth(row: Row<EthRecord>, columnId: string, filterValue: unknown) {
+    return customFilterFns.rangeEth(row, columnId, filterValue, noopAddMeta)
+  }
+  function rangeGwei(row: Row<EthRecord>, columnId: string, filterValue: unknown) {
+    return customFilterFns.rangeGwei(row, columnId, filterValue, noopAddMeta)
+  }
+
+  it('rangeEth: a bound typed in ETH is compared in wei (1 ETH = 10^18 wei)', () => {
+    const oneEthInWei = '1000000000000000000'
+    expect(rangeEth(fakeRow(oneEthInWei), 'value_lossless_tx', { min: '1' })).toBe(true)
+    expect(rangeEth(fakeRow(oneEthInWei), 'value_lossless_tx', { min: '1.000001' })).toBe(false)
+  })
+
+  it('rangeEth: a fractional ETH bound converts correctly', () => {
+    // 0.5 ETH = 500000000000000000 wei
+    expect(rangeEth(fakeRow('500000000000000000'), 'value_lossless_tx', { min: '0.5' })).toBe(true)
+    expect(rangeEth(fakeRow('499999999999999999'), 'value_lossless_tx', { min: '0.5' })).toBe(false)
+  })
+
+  it('rangeEth: a max bound in ETH excludes a value above it', () => {
+    expect(rangeEth(fakeRow('2000000000000000000'), 'value_lossless_tx', { max: '1' })).toBe(false)
+    expect(rangeEth(fakeRow('1000000000000000000'), 'value_lossless_tx', { max: '1' })).toBe(true)
+  })
+
+  it('rangeGwei: a bound typed in Gwei is compared in wei (1 Gwei = 10^9 wei)', () => {
+    const oneGweiInWei = '1000000000'
+    expect(rangeGwei(fakeRow(oneGweiInWei), 'gas_price_tx', { min: '1' })).toBe(true)
+    expect(rangeGwei(fakeRow('999999999'), 'gas_price_tx', { min: '1' })).toBe(false)
+  })
+
+  it('rangeGwei: a fractional Gwei bound converts correctly', () => {
+    // 2.06 Gwei = 2060000000 wei
+    expect(rangeGwei(fakeRow('2060000000'), 'gas_price_tx', { min: '2.06' })).toBe(true)
+    expect(rangeGwei(fakeRow('2059999999'), 'gas_price_tx', { min: '2.06' })).toBe(false)
+  })
+
+  it('an unset bound (no filter applied) passes every value', () => {
+    expect(rangeEth(fakeRow('123'), 'value_lossless_tx', {})).toBe(true)
+    expect(rangeGwei(fakeRow(null), 'gas_price_tx', {})).toBe(true)
+  })
+
+  it('a null cell value fails an active bound', () => {
+    expect(rangeEth(fakeRow(null), 'value_lossless_tx', { min: '1' })).toBe(false)
   })
 })

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   weiToEth, weiToGwei, formatTimestamp, truncateHex,
-  formatBigInt, compareNumericStrings, toBigInt,
+  formatBigInt, compareNumericStrings, toBigInt, decimalToWei,
 } from './transform'
 
 describe('toBigInt', () => {
@@ -43,6 +43,31 @@ describe('truncateHex', () => {
 describe('formatBigInt', () => {
   it('adds thousands separators', () => expect(formatBigInt('25534300')).toBe('25,534,300'))
   it('null passthrough', () => expect(formatBigInt(null)).toBeNull())
+})
+
+describe('decimalToWei', () => {
+  it('converts a whole ETH amount to wei (18 decimals)', () =>
+    expect(decimalToWei('1', 18)).toBe('1000000000000000000'))
+  it('converts a fractional ETH amount to wei', () =>
+    expect(decimalToWei('0.5', 18)).toBe('500000000000000000'))
+  it('converts a fractional Gwei amount to wei (9 decimals)', () =>
+    expect(decimalToWei('2.06', 9)).toBe('2060000000'))
+  it('zero at any precision is "0"', () => expect(decimalToWei('0', 9)).toBe('0'))
+  it('truncates (does not round) fractional digits past `decimals`', () =>
+    expect(decimalToWei('1.123456789012345678999', 18)).toBe('1123456789012345678'))
+  it('returns null for empty input', () => {
+    expect(decimalToWei('', 18)).toBeNull()
+    expect(decimalToWei('   ', 18)).toBeNull()
+  })
+  it('returns null for non-numeric input', () => {
+    expect(decimalToWei('abc', 18)).toBeNull()
+    expect(decimalToWei('1.2.3', 18)).toBeNull()
+    expect(decimalToWei('.', 18)).toBeNull()
+  })
+  it('handles a leading-dot decimal and a trailing-dot integer', () => {
+    expect(decimalToWei('.5', 18)).toBe('500000000000000000')
+    expect(decimalToWei('5.', 9)).toBe('5000000000')
+  })
 })
 
 describe('compareNumericStrings', () => {

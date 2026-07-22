@@ -8,6 +8,8 @@ interface FilterControlsProps {
   column: Column<EthRecord, unknown>
   kind: ColumnMeta['kind']
   label: string
+  /** Only set for the two columns whose filterFn is 'rangeEth'/'rangeGwei' (columns.tsx) — labels the Min/Max inputs with the unit a typed bound is actually compared in. */
+  rangeUnit?: string
 }
 
 const DEBOUNCE_MS = 250
@@ -29,21 +31,30 @@ function isFilterActive(kind: ColumnMeta['kind'], value: unknown): boolean {
  * `kind` (see columns.tsx `filterFnForKind`) — the same axis that chose the registered
  * TanStack filterFn, so the control offered always matches the comparison actually run.
  */
-export function FilterControls({ column, kind, label }: FilterControlsProps) {
+export function FilterControls({ column, kind, label, rangeUnit }: FilterControlsProps) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const filterValue = column.getFilterValue()
   const isActive = isFilterActive(kind, filterValue)
 
   useEffect(() => {
     if (!open) return
     function handlePointerDown(e: MouseEvent) {
+      // Outside click doesn't return focus to the trigger: the user just deliberately
+      // moved focus/attention somewhere else on the page (another header, a table cell,
+      // …), so forcing it back here would fight that action instead of respecting it.
+      // Escape, below, is a keyboard-only close with nowhere else for focus to logically
+      // go, which is exactly the case focus-return exists for.
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false)
       }
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key === 'Escape') {
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
     }
     document.addEventListener('mousedown', handlePointerDown)
     document.addEventListener('keydown', handleKeyDown)
@@ -56,6 +67,7 @@ export function FilterControls({ column, kind, label }: FilterControlsProps) {
   return (
     <div className="filter-control" ref={containerRef}>
       <button
+        ref={triggerRef}
         type="button"
         className={`filter-control__trigger${isActive ? ' filter-control__trigger--active' : ''}`}
         aria-label={`Filter ${label}`}
@@ -79,7 +91,7 @@ export function FilterControls({ column, kind, label }: FilterControlsProps) {
           onClick={(e) => e.stopPropagation()}
         >
           {kind === 'number' || kind === 'bignum' ? (
-            <RangePanel column={column} />
+            <RangePanel column={column} unit={rangeUnit} />
           ) : kind === 'enum' || kind === 'boolean' ? (
             <EnumPanel column={column} />
           ) : (
@@ -117,10 +129,12 @@ function TextPanel({ column }: { column: Column<EthRecord, unknown> }) {
   )
 }
 
-function RangePanel({ column }: { column: Column<EthRecord, unknown> }) {
+/** `unit`, when set ('ETH'/'Gwei'), labels the inputs so a typed bound's unit is never a guess — see FilterControlsProps.rangeUnit. */
+function RangePanel({ column, unit }: { column: Column<EthRecord, unknown>; unit?: string }) {
   const initial = (column.getFilterValue() as RangeFilterValue | undefined) ?? {}
   const [min, setMin] = useState(initial.min ?? '')
   const [max, setMax] = useState(initial.max ?? '')
+  const unitSuffix = unit ? ` (${unit})` : ''
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -136,10 +150,10 @@ function RangePanel({ column }: { column: Column<EthRecord, unknown> }) {
   return (
     <div className="filter-popover__range">
       <label className="filter-popover__field">
-        <span className="filter-popover__label">Min</span>
+        <span className="filter-popover__label">Min{unitSuffix}</span>
         <input
           type="text"
-          inputMode="numeric"
+          inputMode={unit ? 'decimal' : 'numeric'}
           className="filter-popover__input filter-popover__input--mono"
           value={min}
           onChange={(e) => setMin(e.target.value)}
@@ -148,10 +162,10 @@ function RangePanel({ column }: { column: Column<EthRecord, unknown> }) {
         />
       </label>
       <label className="filter-popover__field">
-        <span className="filter-popover__label">Max</span>
+        <span className="filter-popover__label">Max{unitSuffix}</span>
         <input
           type="text"
-          inputMode="numeric"
+          inputMode={unit ? 'decimal' : 'numeric'}
           className="filter-popover__input filter-popover__input--mono"
           value={max}
           onChange={(e) => setMax(e.target.value)}

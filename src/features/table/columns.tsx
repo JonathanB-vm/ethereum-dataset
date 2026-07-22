@@ -80,15 +80,23 @@ function filterFnForKind(kind: ColumnMeta['kind']): 'text' | 'range' | 'enumMult
 
 const helper = createColumnHelper<EthRecord>()
 
-/** Builds a header cell: sort control (SortableHeader) + filter popover (FilterControls), driven by the field's dictionary `kind`. */
-function header(field: keyof EthRecord, label?: string) {
+/**
+ * Builds a header cell: sort control (SortableHeader) + filter popover (FilterControls),
+ * driven by the field's dictionary `kind`. `rangeUnit` is only passed for the two
+ * transactions-tab columns whose registered filterFn is the display-unit-aware
+ * `'rangeEth'`/`'rangeGwei'` (see columns below) — it tells FilterControls to label its
+ * Min/Max inputs "(ETH)"/"(Gwei)" so the unit a bound is compared in is never a guess.
+ */
+function header(field: keyof EthRecord, label?: string, rangeUnit?: string) {
   const displayLabel = label ?? columnDisplayLabel(field)
   const meta = getColumnMeta(field)
   const filterFn = meta ? filterFnForKind(meta.kind) : undefined
   return ({ column }: { column: Column<EthRecord, unknown> }) => (
     <div className="col-header-cell">
       <SortableHeader label={displayLabel} column={column} />
-      {meta && filterFn && <FilterControls column={column} kind={meta.kind} label={displayLabel} />}
+      {meta && filterFn && (
+        <FilterControls column={column} kind={meta.kind} label={displayLabel} rangeUnit={rangeUnit} />
+      )}
     </div>
   )
 }
@@ -179,18 +187,23 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
   helper.accessor('value_lossless_tx', {
     // Uses the DISPLAY_LABEL_OVERRIDES entry ("Value ETH", not the dictionary's "Value
     // (lossless)") — this column renders the wei value converted to ETH, so the header
-    // should say what's actually on screen.
-    header: header('value_lossless_tx'),
+    // should say what's actually on screen. The filter has to match: 'rangeEth' (not the
+    // generic 'range' `filterFor` would give a bignum column) converts a typed ETH bound
+    // to wei before comparing, so "≥ 1" here means ≥ 1 ETH, matching what's displayed —
+    // not ≥ 1 wei, which off by 10^18 would make almost every bound a no-op.
+    header: header('value_lossless_tx', undefined, 'ETH'),
     cell: (info) => <EthValueCell value={info.getValue()} />,
     sortingFn: 'bignum',
-    filterFn: filterFor('value_lossless_tx'),
+    filterFn: 'rangeEth',
   }),
   helper.accessor('gas_price_tx', {
-    // Same reasoning as above — displayed in Gwei, not the dictionary's raw "Gas Price" (wei).
-    header: header('gas_price_tx'),
+    // Same reasoning as above — displayed in Gwei, not the dictionary's raw "Gas Price"
+    // (wei), so its filter ('rangeGwei') converts a typed Gwei bound to wei (off by 10^9
+    // if left as the generic 'range').
+    header: header('gas_price_tx', undefined, 'Gwei'),
     cell: (info) => <GweiCell value={info.getValue()} />,
     sortingFn: 'bignum',
-    filterFn: filterFor('gas_price_tx'),
+    filterFn: 'rangeGwei',
   }),
   helper.accessor('gas_tx', {
     header: header('gas_tx'),

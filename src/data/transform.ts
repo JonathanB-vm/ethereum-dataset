@@ -49,6 +49,32 @@ export function formatBigInt(v: string | null): string | null {
   return b.toLocaleString('en-US')
 }
 
+/**
+ * Parses a decimal string in a *display* unit (e.g. "0.5" ETH, "2.06" Gwei) into the
+ * wei-scale integer string BigQuery's raw columns actually store, so a filter bound typed
+ * in the unit the column displays can be compared against the raw stored value. BigInt-only
+ * (never `Number`/`parseFloat`) — same precision rationale as `toBigInt` above. The
+ * fractional part is truncated (not rounded) past `decimals` digits, matching how the rest
+ * of this module treats excess precision. Returns `null` for empty/invalid input (more than
+ * one `.`, non-digit characters, …) so a caller can treat that as "bound not set yet"
+ * instead of rejecting every row while the user is still typing.
+ */
+export function decimalToWei(input: string, decimals: number): string | null {
+  const trimmed = input.trim()
+  if (trimmed === '') return null
+
+  const negative = trimmed.startsWith('-')
+  const body = negative ? trimmed.slice(1) : trimmed
+  if (!/^\d*\.?\d*$/.test(body) || body === '' || body === '.') return null
+
+  const [intPartRaw, fracPartRaw = ''] = body.split('.')
+  const intPart = intPartRaw === '' ? '0' : intPartRaw
+  const frac = fracPartRaw.slice(0, decimals).padEnd(decimals, '0')
+
+  const scaled = BigInt(intPart) * 10n ** BigInt(decimals) + BigInt(frac === '' ? '0' : frac)
+  return (negative ? -scaled : scaled).toString()
+}
+
 /** Numeric-aware comparator for BigQuery numeric strings. Nulls sort last. */
 export function compareNumericStrings(a: string | null, b: string | null): number {
   const ba = toBigInt(a)

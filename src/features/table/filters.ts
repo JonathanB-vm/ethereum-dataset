@@ -1,7 +1,7 @@
 import type { FilterFn } from '@tanstack/react-table'
 import { COLUMNS } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
-import { toBigInt } from '../../data/transform'
+import { decimalToWei, toBigInt } from '../../data/transform'
 
 /** Per-column min/max filter state ({} or all-undefined means "no bound set"). */
 export interface RangeFilterValue {
@@ -76,15 +76,38 @@ export function globalFilterFn(record: EthRecord, query: string): boolean {
   return false
 }
 
+/**
+ * `value_lossless_tx` ("Value ETH") and `gas_price_tx` ("Gas Price Gwei") store raw wei
+ * but are *displayed* converted to ETH / Gwei — so their filter bounds have to be typed
+ * (and compared) in that same display unit, not raw wei, or "≥ 50" would silently mean
+ * "≥ 50 wei" (a no-op) instead of "≥ 50 ETH"/"≥ 50 Gwei". This converts the user-typed
+ * decimal bound to wei via `decimalToWei` before delegating to `rangeFilter`'s ordinary
+ * (already-wei-scale, BigInt-safe) comparison — an unparseable/empty bound converts to
+ * `undefined`, which `rangeFilter` already treats as "not set" rather than rejecting every
+ * row, so a bound that's still mid-typing (e.g. a lone "0.") doesn't hide the whole column.
+ */
+function decimalRangeFilterFn(decimals: number): FilterFn<EthRecord> {
+  return (row, columnId, filterValue: RangeFilterValue | undefined) => {
+    const range = filterValue ?? {}
+    const min = range.min?.trim() ? (decimalToWei(range.min, decimals) ?? undefined) : undefined
+    const max = range.max?.trim() ? (decimalToWei(range.max, decimals) ?? undefined) : undefined
+    return rangeFilter(row.getValue(columnId), { min, max })
+  }
+}
+
 // TanStack Table's filter-fn registry is an empty interface consumers augment by
 // declaration merging (same pattern as `SortingFns` in columns.tsx) — this is what lets
 // column defs reference these filters by the string keys `'text'` / `'range'` /
-// `'enumMulti'` instead of importing the function itself.
+// `'enumMulti'` / `'rangeEth'` / `'rangeGwei'` instead of importing the function itself.
 declare module '@tanstack/table-core' {
   interface FilterFns {
     text: FilterFn<EthRecord>
     range: FilterFn<EthRecord>
     enumMulti: FilterFn<EthRecord>
+    /** `value_lossless_tx` only — bounds typed in ETH, compared in wei. */
+    rangeEth: FilterFn<EthRecord>
+    /** `gas_price_tx` only — bounds typed in Gwei, compared in wei. */
+    rangeGwei: FilterFn<EthRecord>
   }
 }
 
@@ -93,6 +116,8 @@ export const customFilterFns = {
   text: (row, columnId, filterValue: string) => textFilter(row.getValue(columnId), filterValue),
   range: (row, columnId, filterValue: RangeFilterValue) => rangeFilter(row.getValue(columnId), filterValue),
   enumMulti: (row, columnId, filterValue: string[]) => enumFilter(filterValue, row.getValue(columnId)),
+  rangeEth: decimalRangeFilterFn(18),
+  rangeGwei: decimalRangeFilterFn(9),
 } satisfies Record<string, FilterFn<EthRecord>>
 
 /** Registered as the table's `globalFilterFn` option — operates on the whole record, not just the column TanStack happens to be iterating. */

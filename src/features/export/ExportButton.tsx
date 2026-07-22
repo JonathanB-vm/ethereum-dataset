@@ -16,14 +16,22 @@ interface ExportButtonProps {
 export function ExportButton({ table, tab, blockNumber }: ExportButtonProps) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (!open) return
     function handlePointerDown(e: MouseEvent) {
+      // Outside click doesn't return focus to the trigger — same reasoning as
+      // FilterControls: the user deliberately moved focus elsewhere, so pulling it back
+      // here would fight that. Escape, below, is keyboard-only with nowhere else for
+      // focus to logically land, so it does restore it.
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key === 'Escape') {
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
     }
     document.addEventListener('mousedown', handlePointerDown)
     document.addEventListener('keydown', handleKeyDown)
@@ -58,6 +66,7 @@ export function ExportButton({ table, tab, blockNumber }: ExportButtonProps) {
   return (
     <div className="export-button" ref={containerRef}>
       <button
+        ref={triggerRef}
         type="button"
         className="export-button__trigger"
         aria-haspopup="menu"

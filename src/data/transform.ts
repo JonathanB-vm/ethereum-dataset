@@ -43,6 +43,17 @@ export function truncateHex(hex: string, lead = 6, tail = 4): string {
   return `${hex.slice(0, lead)}…${hex.slice(-tail)}`
 }
 
+/**
+ * Head…tail truncation for arbitrarily long raw values (input_tx calldata, access lists,
+ * signature components) — same shape and "don't truncate when nothing is saved" guard as
+ * truncateHex above, but with defaults sized for RowDetail's field values rather than
+ * table cells. Callers keep the full value available via `title`/copy.
+ */
+export function truncateMiddle(value: string, head = 24, tail = 12): string {
+  if (value.length <= head + tail + 1) return value
+  return `${value.slice(0, head)}…${value.slice(-tail)}`
+}
+
 /** Thousands-separated plain integer for UI copy (tab counts, row/page counts, tile values). */
 export function formatCount(n: number): string {
   return n.toLocaleString('en-US')

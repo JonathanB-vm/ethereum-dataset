@@ -1,7 +1,7 @@
 import { CopyButton } from '../../components/CopyButton'
 import { getColumnMeta } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
-import { formatTimestamp, weiToEth, weiToGwei } from '../../data/transform'
+import { formatTimestamp, truncateMiddle, weiToEth, weiToGwei } from '../../data/transform'
 import { GROUPS, HUMAN_UNIT } from './rowDetailFields'
 
 interface RowDetailProps {
@@ -58,7 +58,13 @@ export function RowDetail({ record }: RowDetailProps) {
                     <span className="row-detail__field-value row-detail__field-value--empty">–</span>
                   ) : (
                     <span className="row-detail__field-value">
-                      <span className="row-detail__field-raw">{raw}</span>
+                      {/* Long blobs (input_tx calldata, access lists, r/s signatures) render
+                          head…tail so one field can't blow the panel up vertically. The full
+                          value stays reachable two ways: hover (`title`) and copy — the
+                          CopyButton always receives the untruncated raw string. */}
+                      <span className="row-detail__field-raw" title={raw}>
+                        {truncateMiddle(raw)}
+                      </span>
                       <CopyButton value={raw} />
                     </span>
                   )}

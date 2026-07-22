@@ -15,6 +15,7 @@ import {
   NumberCell,
   RawCell,
   TimeCell,
+  TxHashCell,
 } from './CellRenderers'
 
 // TanStack Table's sorting-fn registry is an empty interface consumers augment by
@@ -99,8 +100,8 @@ function header(tab: TabId, field: keyof EthRecord, rangeUnit?: string) {
   const filterFn = meta ? filterFnForKind(meta.kind) : undefined
   return ({ column }: { column: Column<EthRecord, unknown> }) => (
     <div className="col-header-cell">
-      <SortableHeader label={displayLabel} column={column} />
       <DictionaryInfoTrigger field={field} label={displayLabel} />
+      <SortableHeader label={displayLabel} column={column} />
       {meta && filterFn && (
         <FilterControls column={column} kind={meta.kind} label={displayLabel} rangeUnit={rangeUnit} />
       )}
@@ -123,7 +124,7 @@ const transferColumns: ColumnDef<EthRecord>[] = [
   }),
   helper.accessor('transaction_hash', {
     header: header('transfers', 'transaction_hash'),
-    cell: (info) => <AddressCell value={info.getValue()} />,
+    cell: (info) => <TxHashCell value={info.getValue()} />,
     filterFn: filterFor('transaction_hash'),
   }),
   helper.accessor('event_type', {
@@ -179,7 +180,7 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
   }),
   helper.accessor('transaction_hash', {
     header: header('transactions', 'transaction_hash'),
-    cell: (info) => <AddressCell value={info.getValue()} />,
+    cell: (info) => <TxHashCell value={info.getValue()} />,
     filterFn: filterFor('transaction_hash'),
   }),
   helper.accessor('from_address_tx', {

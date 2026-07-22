@@ -140,16 +140,20 @@ button {
   width: 30px;
   height: 30px;
   flex: none;
-  font-size: 18px;
   color: var(--accent);
   background: var(--accent-muted);
   border-radius: var(--radius-sm);
 }
 
+/* Terminal register: the title is set in the data face (mono, caps, letterspaced) —
+   the app's identity IS the data, so the wordmark speaks in the same voice as the
+   hex columns below it, not in generic UI-sans. */
 .app-header__brand h1 {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;

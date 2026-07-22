@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  weiToEth, weiToGwei, formatTimestamp, truncateHex,
+  weiToEth, weiToGwei, formatTimestamp, truncateHex, truncateMiddle,
   formatBigInt, compareNumericStrings, toBigInt, decimalToWei,
 } from './transform'
 
@@ -38,6 +38,24 @@ describe('truncateHex', () => {
     expect(truncateHex('0x0058db6926d4d88a6595b82e177bdcb2be8579b96e895ceaa90e7cbfce236fc5'))
       .toBe('0x0058…6fc5'))
   it('leaves short values alone', () => expect(truncateHex('0x1')).toBe('0x1'))
+})
+
+describe('truncateMiddle', () => {
+  it('keeps the head and tail of a long value with … between', () => {
+    const input = '0x' + 'ab'.repeat(100) // 202 chars of calldata-like hex
+    const out = truncateMiddle(input)
+    expect(out).toBe(`${input.slice(0, 24)}…${input.slice(-12)}`)
+    expect(out).toHaveLength(24 + 1 + 12)
+  })
+  it('leaves short values alone', () => expect(truncateMiddle('0xdeadbeef')).toBe('0xdeadbeef'))
+  it('does not "truncate" when nothing would be saved (boundary length)', () => {
+    const exact = 'a'.repeat(24 + 12 + 1) // 37 chars — same length as the truncated form
+    expect(truncateMiddle(exact)).toBe(exact)
+    const oneOver = 'a'.repeat(24 + 12 + 2)
+    expect(truncateMiddle(oneOver)).toBe(`${'a'.repeat(24)}…${'a'.repeat(12)}`)
+  })
+  it('honors custom head/tail lengths', () =>
+    expect(truncateMiddle('abcdefghijklmnop', 4, 3)).toBe('abcd…nop'))
 })
 
 describe('formatBigInt', () => {

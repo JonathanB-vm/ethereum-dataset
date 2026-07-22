@@ -14,23 +14,61 @@ interface HexCellProps {
   value: string | null
   lead?: number
   tail?: number
+  /** Render a deterministic identity swatch before the text (addresses only). */
+  swatch?: boolean
 }
 
-/** Mono hex value, truncated with full value in `title`; reveals a copy button on row hover. */
-export function HexCell({ value, lead = 6, tail = 4 }: HexCellProps) {
+/**
+ * Deterministic hue (0–359) from a hex string's digits — the same address always yields
+ * the same hue, so a recurring party gets a recurring color. Fixed saturation/lightness
+ * keep every swatch in one family (and legible on both themes); only hue varies.
+ */
+function hexHue(value: string): number {
+  let h = 0
+  // Skip the constant '0x' prefix — it carries no identity.
+  for (let i = 2; i < value.length; i++) h = (h * 33 + value.charCodeAt(i)) >>> 0
+  return h % 360
+}
+
+/**
+ * Mono hex value, truncated with full value in `title`; reveals a copy button on row
+ * hover. The constant `0x` prefix renders faint — every value in a hex column shares it,
+ * so de-emphasizing it puts the eye straight on the digits that actually differ.
+ */
+export function HexCell({ value, lead = 6, tail = 4, swatch = false }: HexCellProps) {
   if (value == null || value === '') return <NullCell />
+  const display = truncateHex(value, lead, tail)
+  const body = display.startsWith('0x') ? display.slice(2) : display
   return (
     <span className="hex-cell">
+      {swatch && (
+        <span
+          className="hex-cell__swatch"
+          aria-hidden="true"
+          style={{ background: `hsl(${hexHue(value)} 60% 56%)` }}
+        />
+      )}
       <span className="hex-cell__text" title={value}>
-        {truncateHex(value, lead, tail)}
+        {display.startsWith('0x') && <span className="hex-cell__prefix">0x</span>}
+        {body}
       </span>
       <CopyButton value={value} />
     </span>
   )
 }
 
-/** Addresses use a longer lead (8 chars) so common prefixes stay distinguishable. */
+/**
+ * Addresses use a longer lead (8 chars) so common prefixes stay distinguishable, plus an
+ * identity swatch (color derived from the address itself) — repeated addresses become
+ * visually trackable across rows without reading the hex. Tx hashes deliberately get no
+ * swatch: they're unique per row, so color there would be noise, not signal.
+ */
 export function AddressCell({ value }: { value: string | null }) {
+  return <HexCell value={value} lead={8} swatch />
+}
+
+/** Tx hashes share the address treatment minus the swatch — see AddressCell's docstring. */
+export function TxHashCell({ value }: { value: string | null }) {
   return <HexCell value={value} lead={8} />
 }
 

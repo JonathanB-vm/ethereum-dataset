@@ -1,10 +1,15 @@
 /* ---------- stats band ---------- */
 
+/* Un-boxed instrument strip: no cards, one ruled row of readouts divided by hairlines.
+   `grid-auto-flow: column` keeps it a single row always — on viewports too narrow for
+   all six readouts it scrolls horizontally (like a terminal ticker) rather than wrapping
+   into a tile grid, which is also what keeps the divider logic (`+` sibling border)
+   correct: there is never a "first column of row two" to draw a stray rule on. */
 .stats-band {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  padding: 16px 24px;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(190px, 1fr);
+  overflow-x: auto;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
@@ -14,10 +19,12 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-  padding: 14px 16px;
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  /* 24px left inset aligns the first readout's text with .app-main's 24px page padding. */
+  padding: 16px 20px 14px 24px;
+}
+
+.stat-tile + .stat-tile {
+  border-left: 1px solid var(--border);
 }
 
 .stat-tile__label {
@@ -28,11 +35,15 @@
   color: var(--text-muted);
 }
 
+/* The app's one display-size type moment — everything else sits at 11–14px, so the
+   readouts carry the page's visual hierarchy on size alone, no boxes needed. Weight
+   drops to 500: mono at this size holds presence without going bold. */
 .stat-tile__value {
   overflow: hidden;
   font-family: var(--font-mono);
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
   line-height: 1.2;
   color: var(--text);
   white-space: nowrap;

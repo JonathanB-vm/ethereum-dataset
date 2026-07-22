@@ -275,6 +275,47 @@
   gap: 24px;
 }
 
+/* ---------- source filter (full mode only) ---------- */
+/* Three toggle pills — Both / Token Transfers / Transactions — narrowing the section list
+   to one source group. Sticky so the filter stays reachable while scrolling 35 fields;
+   background matches the panel surface so sections slide underneath cleanly. */
+
+.dictionary-filter {
+  position: sticky;
+  top: -20px; /* cancels .dictionary-panel__body's own padding so it pins to the true top */
+  z-index: 1;
+  display: flex;
+  gap: 6px;
+  margin: -8px 0;
+  padding: 8px 0;
+  background: var(--bg-raised);
+}
+
+.dictionary-filter__btn {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.dictionary-filter__btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--bg-inset);
+}
+
+.dictionary-filter__btn--active,
+.dictionary-filter__btn--active:hover {
+  color: var(--accent);
+  border-color: transparent;
+  background: var(--accent-muted);
+}
+
 .dictionary-group__header {
   display: flex;
   align-items: center;

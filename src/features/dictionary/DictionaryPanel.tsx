@@ -5,6 +5,7 @@ import { weiToEth, weiToGwei } from '../../data/transform'
 import { HUMAN_UNIT } from '../table/rowDetailFields'
 import { computeColumnStats } from './columnStats'
 import { DictionaryPanelContext, useDictionaryPanel } from './dictionaryPanelContext'
+import { visibleSources, type SourceFilter } from './sourceFilter'
 import './dictionary.css'
 
 // Context is defined in `./dictionaryPanelContext` (not here) so this file only exports
@@ -65,7 +66,7 @@ export function DictionaryButton() {
   )
 }
 
-/** ⓘ trigger planted in every column header (columns.tsx) — opens single-column mode for `field`. */
+/** Info trigger planted at the left edge of every column header (columns.tsx) — opens single-column mode for `field`. */
 export function DictionaryInfoTrigger({ field, label }: { field: keyof EthRecord; label: string }) {
   const { openField } = useDictionaryPanel()
   return (
@@ -81,8 +82,20 @@ export function DictionaryInfoTrigger({ field, label }: { field: keyof EthRecord
         openField(field)
       }}
     >
-      ⓘ
+      <InfoIcon />
     </button>
+  )
+}
+
+/** Stroke-drawn ⓘ matching FilterControls' FunnelIcon weight — replaces the old text glyph,
+ *  which rendered at inconsistent sizes/baselines across platforms' fallback fonts. */
+function InfoIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.3" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M8 7.4v3.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="8" cy="4.9" r="0.9" fill="currentColor" />
+    </svg>
   )
 }
 
@@ -110,7 +123,8 @@ const SOURCE_BADGE_CLASS: Record<ColumnMeta['source'], string> = {
   derived: 'source-badge--muted',
 }
 
-const SOURCE_ORDER: ColumnMeta['source'][] = ['both', 'token_transfers', 'transactions', 'derived']
+// Section display order lives in sourceFilter.ts (ALL_SOURCES) — FullDictionary renders
+// whatever `visibleSources(filter)` returns, which is that full order when unfiltered.
 
 function SourceBadge({ source }: { source: ColumnMeta['source'] }) {
   return <span className={`source-badge ${SOURCE_BADGE_CLASS[source]}`}>{SOURCE_LABELS[source]}</span>
@@ -281,7 +295,14 @@ function FieldDetail({ field, meta, records }: { field: keyof EthRecord; meta: C
   )
 }
 
+// The three filter buttons, in on-screen order. Labels reuse SOURCE_LABELS so the buttons
+// speak the same vocabulary as the section badges they filter.
+const SOURCE_FILTERS: SourceFilter[] = ['both', 'token_transfers', 'transactions']
+
 function FullDictionary({ records }: { records: EthRecord[] }) {
+  // Toggle semantics: clicking the active filter deselects it (back to all sections),
+  // so `null` — not a fourth "All" button — is the unfiltered state.
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter | null>(null)
   // 35 fields × a full-dataset scan each — worth memoizing so re-renders of the open panel
   // (e.g. parent state changes) don't recompute every column's stats from scratch.
   const statsByField = useMemo(
@@ -290,7 +311,23 @@ function FullDictionary({ records }: { records: EthRecord[] }) {
   )
   return (
     <div className="dictionary-full">
-      {SOURCE_ORDER.map((source) => {
+      <div className="dictionary-filter" role="group" aria-label="Filter fields by source">
+        {SOURCE_FILTERS.map((f) => {
+          const active = sourceFilter === f
+          return (
+            <button
+              key={f}
+              type="button"
+              className={`dictionary-filter__btn${active ? ' dictionary-filter__btn--active' : ''}`}
+              aria-pressed={active}
+              onClick={() => setSourceFilter(active ? null : f)}
+            >
+              {SOURCE_LABELS[f]}
+            </button>
+          )
+        })}
+      </div>
+      {visibleSources(sourceFilter).map((source) => {
         const fields = COLUMNS.filter((c) => c.source === source)
         if (fields.length === 0) return null
         return (

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import {
   flexRender,
   getCoreRowModel,
@@ -20,8 +20,10 @@ import type { EthRecord } from '../../data/types'
 import { customSortingFns, getColumnsForTab } from './columns'
 import { customFilterFns, tableGlobalFilterFn } from './filters'
 import { FilterChips } from './FilterChips'
+import { ExpandIcon } from './FullscreenToggle'
 import { pageRange } from './pageRange'
 import { RowDetail } from './RowDetail'
+import { RowFullscreen } from './RowFullscreen'
 import type { TabId } from './Tabs'
 import './table.css'
 
@@ -56,6 +58,12 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
   // gives "only one row expanded at a time, replaced on toggle" instead of TanStack's
   // default multi-row-expansion merge behavior.
   const [expandedState, setExpandedState] = useState<ExpandedState>({})
+  // Which record (if any) is open in the fullscreen preview (RowFullscreen). Owned here,
+  // not in App: nothing outside the table participates. The trigger ref captures the
+  // per-row button that opened it so close (✕ or Esc) can restore focus there — same
+  // pattern as DictionaryPanelProvider.
+  const [fullscreenRow, setFullscreenRow] = useState<EthRecord | null>(null)
+  const fullscreenTriggerRef = useRef<HTMLElement | null>(null)
 
   // Tab switch = a different column set, so sort/filter state from the old tab wouldn't
   // even apply cleanly (a sort — or a per-column filter — on "Quantity" makes no sense on
@@ -85,6 +93,7 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
     setPaginationState((p) => ({ pageIndex: 0, pageSize: p.pageSize }))
     setColumnFiltersState([])
     setExpandedState({})
+    setFullscreenRow(null)
   }
   const sorting = tabChanged ? [] : sortingState
   const pagination = tabChanged ? { pageIndex: 0, pageSize: paginationState.pageSize } : paginationState
@@ -121,6 +130,18 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
       return isOpen ? {} : { [rowId]: true }
     })
   }
+
+  function openRowFullscreen(record: EthRecord, trigger: HTMLElement) {
+    fullscreenTriggerRef.current = trigger
+    setFullscreenRow(record)
+  }
+  // useCallback so RowFullscreen's effect (Esc listener, scroll lock, focus trap) doesn't
+  // tear down and re-register on every DataTable re-render while the preview is open.
+  const closeRowFullscreen = useCallback(() => {
+    setFullscreenRow(null)
+    fullscreenTriggerRef.current?.focus()
+    fullscreenTriggerRef.current = null
+  }, [])
 
   // The table instance is a stable ref across re-renders (TanStack creates it once and
   // mutates its options in place) — this fires on mount and again if the instance itself
@@ -173,21 +194,39 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
                 }}
               />
             ) : (
-              rows.map((row) => {
+              rows.map((row, i) => {
                 const isExpanded = row.getIsExpanded()
                 return (
                   <Fragment key={row.id}>
-                    <tr>
+                    {/* Zebra class from the *visual* page position (map index, not
+                        row.index, which is the unsorted/unfiltered data position) —
+                        expanded detail rows are extra <tr>s that would break :nth-child
+                        counting, so CSS can't do this alone. */}
+                    <tr className={i % 2 === 1 ? 'data-row--even' : undefined}>
                       <td className="row-expander-cell">
-                        <button
-                          type="button"
-                          className={`row-expander${isExpanded ? ' row-expander--open' : ''}`}
-                          onClick={() => toggleRowExpanded(row.id)}
-                          aria-expanded={isExpanded}
-                          aria-label={isExpanded ? 'Collapse row details' : 'Expand row details'}
-                        >
-                          <ChevronIcon />
-                        </button>
+                        {/* Wrapper span (inline-flex) rather than making the <td> itself a
+                            flex container — a display:flex td stops behaving as a table
+                            cell. Holds the expand chevron + fullscreen preview button. */}
+                        <span className="row-actions">
+                          <button
+                            type="button"
+                            className={`row-expander${isExpanded ? ' row-expander--open' : ''}`}
+                            onClick={() => toggleRowExpanded(row.id)}
+                            aria-expanded={isExpanded}
+                            aria-label={isExpanded ? 'Collapse row details' : 'Expand row details'}
+                          >
+                            <ChevronIcon />
+                          </button>
+                          <button
+                            type="button"
+                            className="row-preview"
+                            onClick={(e) => openRowFullscreen(row.original, e.currentTarget)}
+                            aria-label="View row details full screen"
+                            title="View row details full screen"
+                          >
+                            <ExpandIcon />
+                          </button>
+                        </span>
                       </td>
                       {row.getVisibleCells().map((cell) => (
                         <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
@@ -253,6 +292,8 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
           </button>
         </div>
       </div>
+
+      {fullscreenRow && <RowFullscreen record={fullscreenRow} onClose={closeRowFullscreen} />}
     </div>
   )
 }

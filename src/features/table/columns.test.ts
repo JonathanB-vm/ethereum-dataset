@@ -118,7 +118,7 @@ describe('columnDisplayLabel', () => {
  * columnDisplayLabel utility, but the real ColumnDef path: invoke the def's `header`
  * function (safe with a stub column — it only creates elements, never reads the column
  * until render) and read the `label` prop off the SortableHeader element it returns
- * (the first child of the `.col-header-cell` wrapper).
+ * (the second child of the `.col-header-cell` wrapper — the ⓘ info trigger sits first).
  */
 function headerLabel(tab: Parameters<typeof getColumnsForTab>[0], field: keyof EthRecord): string {
   const def = getColumnsForTab(tab).find((d) => 'accessorKey' in d && d.accessorKey === field)
@@ -127,7 +127,7 @@ function headerLabel(tab: Parameters<typeof getColumnsForTab>[0], field: keyof E
   }
   const el = def.header({ column: {} as Column<EthRecord, unknown> } as never) as ReactElement
   const children = (el.props as { children: ReactElement[] }).children
-  return (children[0].props as { label: string }).label
+  return (children[1].props as { label: string }).label
 }
 
 describe('column-def header labels (the rendered path, not just the utility)', () => {

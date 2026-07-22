@@ -186,7 +186,9 @@
   gap: 5px;
   flex: 1;
   min-width: 0;
-  padding: 10px 6px 10px 14px;
+  /* Left padding is small because the ⓘ trigger (8px margin + 18px button) now provides
+     the cell's left inset — 14px here on top of that would push labels too far right. */
+  padding: 10px 6px;
   font-family: var(--font-ui);
   font-size: 11px;
   font-weight: 600;
@@ -224,28 +226,28 @@
 /* ⓘ description affordance — opens DictionaryPanel in single-column mode for this field
    (see columns.tsx's header() + DictionaryInfoTrigger). Sits as its own sibling button in
    `.col-header-cell` (not nested inside `.col-header`, which is itself a `<button>` — a
-   button-in-button would be invalid HTML) between the sort control and the filter trigger. */
+   button-in-button would be invalid HTML) at the LEFT edge of the row, before the sort
+   control. `align-self: center` opts it out of the row's `align-items: stretch` so the
+   round button floats mid-height instead of hugging the top. */
 .col-header__info {
   display: grid;
   place-items: center;
   flex: none;
-  width: 20px;
-  height: 20px;
+  align-self: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 8px;
   padding: 0;
-  font-size: 12px;
-  font-family: var(--font-ui);
-  text-transform: none;
   color: var(--text-faint);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border: none;
+  border-radius: 50%;
   cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .col-header__info:hover {
   color: var(--accent);
-  border-color: var(--border-strong);
   background: var(--bg-inset);
 }
 
@@ -512,8 +514,18 @@
   border-bottom: none;
 }
 
+/* Zebra stripes — keyed off a class DataTable.tsx sets from the row *model's* index, not
+   :nth-child, because expanded row-detail rows are extra <tr> siblings that would throw
+   CSS child counting off by one for every row after them. Very low alpha: a reading
+   guide, not a pattern. */
+.data-table tbody tr.data-row--even td {
+  background: color-mix(in srgb, var(--bg-inset) 45%, transparent);
+}
+
+/* Hover carries a whisper of accent so it reads as "selected-ish", distinct from the
+   neutral zebra tint above — and stated after it so hover wins on striped rows. */
 .data-table tbody tr:hover td {
-  background: var(--bg-inset);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-inset));
 }
 
 /* ---------- cell renderers ---------- */
@@ -530,8 +542,26 @@
   gap: 6px;
 }
 
+/* Identity swatch — hue derived from the address itself (CellRenderers' hexHue), so the
+   same party carries the same color everywhere it appears. Decorative (aria-hidden): the
+   mono text is the accessible value, so the swatch has no contrast requirement. */
+.hex-cell__swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  /* Hairline inner ring keeps very light/dark hues from dissolving into either theme. */
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
 .hex-cell__text {
   color: var(--text);
+}
+
+/* The constant '0x' every hex value shares — de-emphasized so the eye lands on the
+   digits that differ. */
+.hex-cell__prefix {
+  color: var(--text-faint);
 }
 
 .time-cell {
@@ -686,8 +716,9 @@ tr:hover .copy-btn,
    shows up in `table.getVisibleLeafColumns()` — keeping ExportButton's CSV column list and
    FilterChips exactly the 35 dictionary fields, untouched by this task. */
 
+/* Wide enough for the chevron + fullscreen-preview button pair (.row-actions). */
 .row-expander-header {
-  width: 32px;
+  width: 58px;
 }
 
 /* Specificity matched to (and placed after) `.data-table tbody td` on purpose, so this
@@ -697,7 +728,16 @@ tr:hover .copy-btn,
   text-align: center;
 }
 
-.row-expander {
+/* Chevron + fullscreen-preview button, side by side in the expander cell. A span (not
+   display:flex on the <td>) so the td keeps behaving as a table cell. */
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.row-expander,
+.row-preview {
   display: grid;
   place-items: center;
   width: 22px;
@@ -711,10 +751,17 @@ tr:hover .copy-btn,
   transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
 }
 
-.row-expander:hover {
+.row-expander:hover,
+.row-preview:hover {
   color: var(--text);
   border-color: var(--border-strong);
   background: var(--bg-inset);
+}
+
+/* ExpandIcon ships at the toolbar's 14px; scaled down here to sit beside the 12px chevron. */
+.row-preview svg {
+  width: 11px;
+  height: 11px;
 }
 
 .row-expander svg {
@@ -805,4 +852,78 @@ tr:hover .copy-btn,
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--accent);
+}
+
+/* ---------- per-row fullscreen preview (RowFullscreen.tsx) ---------- */
+
+.row-fullscreen {
+  position: fixed;
+  inset: 0;
+  /* Above .table-card--fullscreen (15): the preview must also work from table fullscreen. */
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.row-fullscreen__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  padding: 12px 24px;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+}
+
+.row-fullscreen__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.row-fullscreen__hash {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Same 30px utility-button language as .theme-toggle / .fullscreen-toggle. */
+.row-fullscreen__close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.row-fullscreen__close:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--bg-inset);
+}
+
+.row-fullscreen__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* RowDetail's own 46px left inset exists to align under the table's chevron column —
+   irrelevant here, where the body brings its own uniform 24px padding. */
+.row-fullscreen__body .row-detail {
+  padding: 0;
 }

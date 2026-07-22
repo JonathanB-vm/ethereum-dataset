@@ -31,8 +31,10 @@ export const FullscreenToggle = forwardRef<HTMLButtonElement, FullscreenTogglePr
   },
 )
 
-/** Four outward-pointing corner brackets — the conventional "enter fullscreen" glyph. */
-function ExpandIcon() {
+/** Four outward-pointing corner brackets — the conventional "enter fullscreen" glyph.
+ *  Exported: DataTable's per-row preview button uses the same glyph (smaller, via CSS)
+ *  so "this opens fullscreen" reads as one consistent affordance everywhere. */
+export function ExpandIcon() {
   return (
     <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
       <path

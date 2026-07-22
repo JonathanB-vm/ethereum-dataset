@@ -20,11 +20,14 @@
      WCAG 4.5:1 on every surface it sits on (4.74:1 on --bg-raised, the weakest) while
      staying clearly below --text-muted's 6.94:1. */
   --text-faint: #78829a;
-  --accent: #5b8def;
-  --accent-muted: rgba(91, 141, 239, 0.14);
+  /* Violet-indigo (Ethereum's own visual register) rather than default dashboard blue.
+     As text over its own 14% tint it clears 4.5:1 on every surface (5.11:1 on
+     tint-over---bg-raised, the weakest). */
+  --accent: #948bf2;
+  --accent-muted: rgba(148, 139, 242, 0.14);
   /* Text painted on top of a solid --accent fill (e.g. the primary Retry button). This
-     theme's --accent is light/mid-tone enough that near-white fails 4.5:1 (~3.23:1) --
-     near-black passes with margin (~5.98:1), so the two themes intentionally land on
+     theme's --accent is light/mid-tone enough that near-white fails 4.5:1 --
+     near-black passes with margin (~6.65:1), so the two themes intentionally land on
      opposite ends of the scale rather than sharing one "near-white" value. */
   --text-on-accent: #0b0e14;
   --positive: #3fb68b;
@@ -44,11 +47,12 @@
   /* Same 4.5:1 floor as dark's --text-faint (4.77:1 on --bg-inset, the weakest surface);
      light themes compress the muted/faint contrast range — hierarchy leans on size/weight. */
   --text-faint: #5f6a80;
-  /* Deep enough that accent-on-accent-muted text (badges, filter chips) clears 4.5:1 over
-     both --bg-raised (5.21:1) and --bg-inset (4.57:1). */
-  --accent: #285dc9;
-  --accent-muted: rgba(40, 93, 201, 0.1);
-  /* This theme's --accent is dark/saturated enough that white passes 4.5:1 (~6.0:1). */
+  /* Violet-indigo counterpart to dark's accent. Deep enough that accent-on-accent-muted
+     text (badges, filter chips) clears 4.5:1 over both --bg-raised (5.84:1) and
+     --bg-inset (5.12:1). */
+  --accent: #5246cc;
+  --accent-muted: rgba(82, 70, 204, 0.1);
+  /* This theme's --accent is dark/saturated enough that white passes 4.5:1 (~6.76:1). */
   --text-on-accent: #ffffff;
   /* Dark enough that positive-badge text on its 14% tint clears 4.5:1 (4.82:1). */
   --positive: #177252;

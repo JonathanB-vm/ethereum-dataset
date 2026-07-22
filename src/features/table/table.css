@@ -33,6 +33,29 @@
   border: none;
   border-radius: 0;
   overflow: visible;
+  /* Gentle zoom-settle on entry; the decelerating curve matches the app's other overlay
+     entrances (dictionary panel, row fullscreen). */
+  animation: table-fs-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes table-fs-in {
+  from {
+    transform: scale(0.975);
+    opacity: 0.3;
+  }
+}
+
+/* Exit phase — App.tsx holds fsPhase='closing' (still position:fixed) for motion.ts's
+   EXIT_DURATION_MS (0.2s, keep in sync) while this plays, then drops back to page layout. */
+.table-card--fs-closing {
+  animation: table-fs-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes table-fs-out {
+  to {
+    transform: scale(0.975);
+    opacity: 0;
+  }
 }
 
 /* ---------- toolbar: fullscreen toggle ---------- */
@@ -864,6 +887,36 @@ tr:hover .copy-btn,
   display: flex;
   flex-direction: column;
   background: var(--bg);
+  /* Fade + rise entrance; exit (below) plays while DataTable holds its closing phase for
+     motion.ts's EXIT_DURATION_MS (0.2s, keep in sync) before unmounting. */
+  animation: row-fs-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes row-fs-in {
+  from {
+    transform: translateY(14px) scale(0.99);
+    opacity: 0;
+  }
+}
+
+.row-fullscreen--closing {
+  animation: row-fs-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes row-fs-out {
+  to {
+    transform: translateY(10px) scale(0.99);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .table-card--fullscreen,
+  .table-card--fs-closing,
+  .row-fullscreen,
+  .row-fullscreen--closing {
+    animation: none;
+  }
 }
 
 .row-fullscreen__bar {

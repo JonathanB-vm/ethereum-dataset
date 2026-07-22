@@ -6,6 +6,7 @@ import { HUMAN_UNIT } from '../table/rowDetailFields'
 import { computeColumnStats } from './columnStats'
 import { DictionaryPanelContext, useDictionaryPanel } from './dictionaryPanelContext'
 import { visibleSources, type SourceFilter } from './sourceFilter'
+import { exitDuration } from '../../theme/motion'
 import './dictionary.css'
 
 // Context is defined in `./dictionaryPanelContext` (not here) so this file only exports
@@ -26,31 +27,63 @@ interface DictionaryPanelProviderProps {
 
 export function DictionaryPanelProvider({ records, children }: DictionaryPanelProviderProps) {
   const [state, setState] = useState<PanelState>(null)
+  // True while the exit animation plays: the panel stays mounted (with `--closing`
+  // classes) for `exitDuration()` before the state actually clears — an instant unmount
+  // would cut the slide-out off at frame one.
+  const [closing, setClosing] = useState(false)
   // Captures whichever element was focused (i.e. the trigger just clicked) at open time, so
   // Esc/backdrop/× can restore focus to it on close — same pattern as Task 9's filter
   // popover and export menu, generalized here since there are 35+ possible openers.
   const triggerRef = useRef<HTMLElement | null>(null)
+  // Ref (not the `closing` state) guards re-entry: Esc + backdrop click can both fire
+  // within one frame, before the state re-render lands.
+  const closingRef = useRef(false)
+  const closeTimerRef = useRef<number | undefined>(undefined)
 
-  const openField = useCallback((field: keyof EthRecord) => {
-    triggerRef.current = document.activeElement as HTMLElement | null
-    setState({ field })
+  const cancelPendingClose = useCallback(() => {
+    window.clearTimeout(closeTimerRef.current)
+    closingRef.current = false
+    setClosing(false)
   }, [])
+
+  const openField = useCallback(
+    (field: keyof EthRecord) => {
+      // Re-opening mid-exit-animation must win over the pending unmount timer.
+      cancelPendingClose()
+      triggerRef.current = document.activeElement as HTMLElement | null
+      setState({ field })
+    },
+    [cancelPendingClose],
+  )
   const openFull = useCallback(() => {
+    cancelPendingClose()
     triggerRef.current = document.activeElement as HTMLElement | null
     setState({ field: undefined })
-  }, [])
+  }, [cancelPendingClose])
   const close = useCallback(() => {
-    setState(null)
-    triggerRef.current?.focus()
-    triggerRef.current = null
+    if (closingRef.current) return
+    closingRef.current = true
+    setClosing(true)
+    closeTimerRef.current = window.setTimeout(() => {
+      closingRef.current = false
+      setClosing(false)
+      setState(null)
+      triggerRef.current?.focus()
+      triggerRef.current = null
+    }, exitDuration())
   }, [])
+
+  // The pending unmount timer must not fire into an unmounted provider.
+  useEffect(() => () => window.clearTimeout(closeTimerRef.current), [])
 
   const value = useMemo(() => ({ openField, openFull }), [openField, openFull])
 
   return (
     <DictionaryPanelContext.Provider value={value}>
       {children}
-      {state && <DictionaryPanel records={records} field={state.field} onClose={close} />}
+      {state && (
+        <DictionaryPanel records={records} field={state.field} onClose={close} closing={closing} />
+      )}
     </DictionaryPanelContext.Provider>
   )
 }
@@ -106,6 +139,8 @@ interface DictionaryPanelProps {
   /** Set → single-column mode for this field. Unset → full mode, all 35 fields. */
   field?: keyof EthRecord
   onClose: () => void
+  /** Exit animation in progress — adds the `--closing` classes; unmount follows shortly. */
+  closing: boolean
 }
 
 const SOURCE_LABELS: Record<ColumnMeta['source'], string> = {
@@ -177,7 +212,7 @@ function FillBar({ value }: { value: number }) {
   )
 }
 
-export function DictionaryPanel({ records, field, onClose }: DictionaryPanelProps) {
+export function DictionaryPanel({ records, field, onClose, closing }: DictionaryPanelProps) {
   const closeBtnRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -217,10 +252,13 @@ export function DictionaryPanel({ records, field, onClose }: DictionaryPanelProp
   const title = field ? (meta?.label ?? String(field)) : 'Data dictionary'
 
   return (
-    <div className="dictionary-backdrop" onClick={onClose}>
+    <div
+      className={`dictionary-backdrop${closing ? ' dictionary-backdrop--closing' : ''}`}
+      onClick={onClose}
+    >
       <div
         ref={panelRef}
-        className="dictionary-panel"
+        className={`dictionary-panel${closing ? ' dictionary-panel--closing' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

@@ -20,6 +20,7 @@ import type { EthRecord } from '../../data/types'
 import { customSortingFns, getColumnsForTab } from './columns'
 import { customFilterFns, tableGlobalFilterFn } from './filters'
 import { FilterChips } from './FilterChips'
+import { exitDuration } from '../../theme/motion'
 import { ExpandIcon } from './FullscreenToggle'
 import { pageRange } from './pageRange'
 import { RowDetail } from './RowDetail'
@@ -64,6 +65,12 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
   // pattern as DictionaryPanelProvider.
   const [fullscreenRow, setFullscreenRow] = useState<EthRecord | null>(null)
   const fullscreenTriggerRef = useRef<HTMLElement | null>(null)
+  // Exit-animation phase: the overlay stays mounted (with `--closing`) for exitDuration()
+  // before fullscreenRow clears — instant unmount would cut the fade off at frame one.
+  // The ref (not state) guards re-entry: Esc and ✕ can both fire before a re-render lands.
+  const [fullscreenClosing, setFullscreenClosing] = useState(false)
+  const fullscreenClosingRef = useRef(false)
+  const fullscreenCloseTimerRef = useRef<number | undefined>(undefined)
 
   // Tab switch = a different column set, so sort/filter state from the old tab wouldn't
   // even apply cleanly (a sort — or a per-column filter — on "Quantity" makes no sense on
@@ -132,16 +139,29 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
   }
 
   function openRowFullscreen(record: EthRecord, trigger: HTMLElement) {
+    // Opening (possibly a different row) mid-exit-animation wins over the pending unmount.
+    window.clearTimeout(fullscreenCloseTimerRef.current)
+    fullscreenClosingRef.current = false
+    setFullscreenClosing(false)
     fullscreenTriggerRef.current = trigger
     setFullscreenRow(record)
   }
   // useCallback so RowFullscreen's effect (Esc listener, scroll lock, focus trap) doesn't
   // tear down and re-register on every DataTable re-render while the preview is open.
   const closeRowFullscreen = useCallback(() => {
-    setFullscreenRow(null)
-    fullscreenTriggerRef.current?.focus()
-    fullscreenTriggerRef.current = null
+    if (fullscreenClosingRef.current) return
+    fullscreenClosingRef.current = true
+    setFullscreenClosing(true)
+    fullscreenCloseTimerRef.current = window.setTimeout(() => {
+      fullscreenClosingRef.current = false
+      setFullscreenClosing(false)
+      setFullscreenRow(null)
+      fullscreenTriggerRef.current?.focus()
+      fullscreenTriggerRef.current = null
+    }, exitDuration())
   }, [])
+  // The pending unmount timer must not fire into an unmounted DataTable.
+  useEffect(() => () => window.clearTimeout(fullscreenCloseTimerRef.current), [])
 
   // The table instance is a stable ref across re-renders (TanStack creates it once and
   // mutates its options in place) — this fires on mount and again if the instance itself
@@ -293,7 +313,13 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
         </div>
       </div>
 
-      {fullscreenRow && <RowFullscreen record={fullscreenRow} onClose={closeRowFullscreen} />}
+      {fullscreenRow && (
+        <RowFullscreen
+          record={fullscreenRow}
+          onClose={closeRowFullscreen}
+          closing={fullscreenClosing}
+        />
+      )}
     </div>
   )
 }

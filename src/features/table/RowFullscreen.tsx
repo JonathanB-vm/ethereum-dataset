@@ -6,6 +6,8 @@ import { RowDetail } from './RowDetail'
 interface RowFullscreenProps {
   record: EthRecord
   onClose: () => void
+  /** Exit animation in progress — adds `--closing`; DataTable unmounts shortly after. */
+  closing: boolean
 }
 
 /**
@@ -21,7 +23,7 @@ interface RowFullscreenProps {
  * this renders with role="dialog", App.tsx's table-fullscreen Escape handler already
  * defers to it: one Esc closes this, the next exits table fullscreen.
  */
-export function RowFullscreen({ record, onClose }: RowFullscreenProps) {
+export function RowFullscreen({ record, onClose, closing }: RowFullscreenProps) {
   const closeBtnRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -67,7 +69,7 @@ export function RowFullscreen({ record, onClose }: RowFullscreenProps) {
   return (
     <div
       ref={panelRef}
-      className="row-fullscreen"
+      className={`row-fullscreen${closing ? ' row-fullscreen--closing' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label="Row details"

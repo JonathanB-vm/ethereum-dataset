@@ -14,6 +14,7 @@ import { Tabs, type TabId } from './features/table/Tabs'
 import { ExportButton } from './features/export/ExportButton'
 import { GlobalSearchInput } from './components/GlobalSearchInput'
 import { DictionaryButton, DictionaryPanelProvider } from './features/dictionary/DictionaryPanel'
+import { exitDuration } from './theme/motion'
 
 interface LoadState {
   status: 'loading' | 'error' | 'ready'
@@ -61,20 +62,33 @@ function App() {
   // Task 13: table fullscreen mode. State lives here (not in DataTable/FullscreenToggle)
   // because it toggles a class on `.table-card`, which wraps both the toolbar (where the
   // toggle button sits) and DataTable — a sibling relationship, not parent/child.
-  const [isFullscreen, setIsFullscreen] = useState(false)
+  //
+  // Three phases (not a boolean) because the exit animates: 'closing' keeps the card
+  // position:fixed (with the `--fs-closing` animation class) for exitDuration() before
+  // 'off' drops it back into page layout — an instant class removal would snap it inline
+  // with no transition frame to play.
+  const [fsPhase, setFsPhase] = useState<'off' | 'on' | 'closing'>('off')
   const fullscreenToggleRef = useRef<HTMLButtonElement>(null)
+  const fsCloseTimerRef = useRef<number | undefined>(undefined)
 
   const exitFullscreen = useCallback(() => {
-    setIsFullscreen(false)
-    // Matches every other overlay in this app (filter popovers, export menu, dictionary
-    // panel): a keyboard-only close has nowhere else for focus to logically land, so it
-    // returns to the control that opened it.
-    fullscreenToggleRef.current?.focus()
-  }, [])
+    if (fsPhase !== 'on') return
+    setFsPhase('closing')
+    fsCloseTimerRef.current = window.setTimeout(() => {
+      setFsPhase('off')
+      // Matches every other overlay in this app (filter popovers, export menu, dictionary
+      // panel): a keyboard-only close has nowhere else for focus to logically land, so it
+      // returns to the control that opened it.
+      fullscreenToggleRef.current?.focus()
+    }, exitDuration())
+  }, [fsPhase])
+
+  useEffect(() => () => window.clearTimeout(fsCloseTimerRef.current), [])
 
   function handleFullscreenToggleClick() {
-    if (isFullscreen) exitFullscreen()
-    else setIsFullscreen(true)
+    if (fsPhase === 'on') exitFullscreen()
+    else if (fsPhase === 'off') setFsPhase('on')
+    // 'closing': ignore — the exit already in flight lands in a moment.
   }
 
   // Esc exits fullscreen — but only when nothing "on top" of it already owns Esc. Filter
@@ -91,20 +105,28 @@ function App() {
   // React has flushed their `setOpen(false)` — reads whether one is still in the DOM and,
   // if so, defers: that Escape press closes the popover only, and a second press (nothing
   // left open) is what exits fullscreen.
+  // Scroll lock spans 'on' AND 'closing' — releasing it at closing-start would let the
+  // page reflow (scrollbar reappears) behind the exit animation's final frames.
   useEffect(() => {
-    if (!isFullscreen) return
+    if (fsPhase === 'off') return
     document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [fsPhase])
+
+  // Esc, by contrast, only listens while fully 'on' — during 'closing' there's nothing
+  // left for it to do (exitFullscreen guards re-entry anyway).
+  useEffect(() => {
+    if (fsPhase !== 'on') return
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key !== 'Escape') return
       if (document.querySelector('[role="dialog"], [role="menu"]')) return
       exitFullscreen()
     }
     document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.body.style.overflow = ''
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isFullscreen, exitFullscreen])
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [fsPhase, exitFullscreen])
 
   useEffect(() => {
     let cancelled = false
@@ -205,15 +227,21 @@ function App() {
           {state.status === 'loading' && <LoadingState />}
           {state.status === 'error' && <ErrorState message={state.error} onRetry={handleRetry} />}
           {state.status === 'ready' && state.result && (
-            <div className={`table-card${isFullscreen ? ' table-card--fullscreen' : ''}`}>
+            <div
+              className={`table-card${fsPhase !== 'off' ? ' table-card--fullscreen' : ''}${
+                fsPhase === 'closing' ? ' table-card--fs-closing' : ''
+              }`}
+            >
               <div className="table-toolbar">
                 <Tabs active={activeTab} onChange={setActiveTab} counts={tabCounts} />
                 {table && latest && (
                   <ExportButton table={table} tab={activeTab} blockNumber={latest.block_number} />
                 )}
+                {/* `!== 'off'` (not just 'on') so the collapse icon holds through the
+                    closing phase instead of flicking back one animation early. */}
                 <FullscreenToggle
                   ref={fullscreenToggleRef}
-                  isFullscreen={isFullscreen}
+                  isFullscreen={fsPhase !== 'off'}
                   onToggle={handleFullscreenToggleClick}
                 />
               </div>

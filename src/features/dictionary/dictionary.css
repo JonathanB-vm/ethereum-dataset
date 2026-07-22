@@ -25,16 +25,32 @@
 
 /* ---------- backdrop + slide-over panel ---------- */
 
+/* Open/close animation contract: the entrance plays on mount; the exit plays while the
+   provider holds its `closing` phase (DictionaryPanel.tsx), which keeps the panel mounted
+   for motion.ts's EXIT_DURATION_MS (0.2s — every `--closing` animation here must match).
+   Entrance uses a long decelerating curve (drawer glides to rest); exit is shorter and
+   accelerating (things leaving should get out of the way). */
+
 .dictionary-backdrop {
   position: fixed;
   inset: 0;
   z-index: 20;
   background: rgba(4, 6, 10, 0.5);
-  animation: dictionary-fade 0.15s ease;
+  animation: dictionary-fade 0.3s ease-out;
 }
 
 @keyframes dictionary-fade {
   from {
+    opacity: 0;
+  }
+}
+
+.dictionary-backdrop--closing {
+  animation: dictionary-fade-out 0.2s ease forwards;
+}
+
+@keyframes dictionary-fade-out {
+  to {
     opacity: 0;
   }
 }
@@ -53,19 +69,32 @@
   background: var(--bg-raised);
   border-left: 1px solid var(--border-strong);
   box-shadow: var(--shadow-raised);
-  animation: dictionary-slide-in 0.18s ease;
+  /* True off-canvas slide (its own full width, not a 24px nudge) on an ease-out-expo-like
+     curve — fast launch, long soft landing. */
+  animation: dictionary-slide-in 0.32s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes dictionary-slide-in {
   from {
-    transform: translateX(24px);
-    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+.dictionary-panel--closing {
+  animation: dictionary-slide-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes dictionary-slide-out {
+  to {
+    transform: translateX(100%);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .dictionary-backdrop,
-  .dictionary-panel {
+  .dictionary-backdrop--closing,
+  .dictionary-panel,
+  .dictionary-panel--closing {
     animation: none;
   }
 }

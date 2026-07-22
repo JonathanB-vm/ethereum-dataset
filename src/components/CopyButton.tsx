@@ -17,16 +17,26 @@ export function CopyButton({ value }: CopyButtonProps) {
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     // Rows will later be clickable (row-detail drawer, etc.) — don't let a copy click bubble.
     e.stopPropagation()
-    void navigator.clipboard
-      .writeText(value)
-      .then(() => {
-        setCopied(true)
-        window.clearTimeout(timeoutRef.current)
-        timeoutRef.current = window.setTimeout(() => setCopied(false), 1200)
-      })
-      .catch(() => {
-        // Clipboard permission denied or unavailable — fail silently, no confirmation shown.
-      })
+
+    // `navigator.clipboard` is undefined on http origins and in permission-less iframes,
+    // and *accessing* `.writeText` on it there throws synchronously (not a rejected
+    // promise) — so this has to be checked before the call, a try/catch around a
+    // `.catch()`-chained promise wouldn't see it. Copy must fail silently either way.
+    if (!navigator.clipboard?.writeText) return
+    try {
+      void navigator.clipboard
+        .writeText(value)
+        .then(() => {
+          setCopied(true)
+          window.clearTimeout(timeoutRef.current)
+          timeoutRef.current = window.setTimeout(() => setCopied(false), 1200)
+        })
+        .catch(() => {
+          // Clipboard permission denied — fail silently, no confirmation shown.
+        })
+    } catch {
+      // Defensive: some environments throw synchronously rather than rejecting.
+    }
   }
 
   return (

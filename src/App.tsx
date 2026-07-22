@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Table } from '@tanstack/react-table'
 import { Header } from './components/Header'
 import { csvProvider } from './data/csvProvider'
@@ -31,6 +31,12 @@ function App() {
   // Task 9 (export + filter chips) reaches the live table through this — DataTable
   // reports its instance up via onTableReady, this is where it lands.
   const tableRef = useRef<Table<EthRecord> | null>(null)
+  // Stable identity so DataTable's `useEffect(() => onTableReady?.(table), [table,
+  // onTableReady])` doesn't refire on every App render — an inline arrow prop here would
+  // get a new identity each render and re-trigger that effect continually.
+  const handleTableReady = useCallback((table: Table<EthRecord>) => {
+    tableRef.current = table
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -94,13 +100,7 @@ function App() {
         {state.status === 'ready' && state.result && (
           <div className="table-card">
             <Tabs active={activeTab} onChange={setActiveTab} counts={tabCounts} />
-            <DataTable
-              records={tabRecords}
-              tab={activeTab}
-              onTableReady={(table) => {
-                tableRef.current = table
-              }}
-            />
+            <DataTable records={tabRecords} tab={activeTab} onTableReady={handleTableReady} />
           </div>
         )}
       </main>

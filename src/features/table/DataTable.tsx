@@ -12,6 +12,7 @@ import {
 } from '@tanstack/react-table'
 import type { EthRecord } from '../../data/types'
 import { customSortingFns, getColumnsForTab } from './columns'
+import { pageRange } from './pageRange'
 import type { TabId } from './Tabs'
 import './table.css'
 
@@ -87,8 +88,7 @@ export function DataTable({ records, tab, onTableReady }: DataTableProps) {
   const rows = table.getRowModel().rows
   const totalRows = table.getFilteredRowModel().rows.length
   const { pageIndex, pageSize } = table.getState().pagination
-  const rangeStart = totalRows === 0 ? 0 : pageIndex * pageSize + 1
-  const rangeEnd = Math.min(totalRows, (pageIndex + 1) * pageSize)
+  const { from: rangeStart, to: rangeEnd } = pageRange(pageIndex, pageSize, totalRows)
   const pageCount = Math.max(1, table.getPageCount())
 
   return (
@@ -98,11 +98,15 @@ export function DataTable({ records, tab, onTableReady }: DataTableProps) {
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
-                {headerGroup.headers.map((h) => (
-                  <th key={h.id}>
-                    {h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}
-                  </th>
-                ))}
+                {headerGroup.headers.map((h) => {
+                  const sorted = h.column.getIsSorted()
+                  const ariaSort = sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : undefined
+                  return (
+                    <th key={h.id} aria-sort={h.column.getCanSort() ? (ariaSort ?? 'none') : undefined}>
+                      {h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}
+                    </th>
+                  )
+                })}
               </tr>
             ))}
           </thead>

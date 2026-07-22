@@ -9,6 +9,8 @@ import { StatsBand } from './features/stats/StatsBand'
 import { computeStats } from './features/stats/computeStats'
 import { DataTable } from './features/table/DataTable'
 import { Tabs, type TabId } from './features/table/Tabs'
+import { ExportButton } from './features/export/ExportButton'
+import { GlobalSearchInput } from './components/GlobalSearchInput'
 
 interface LoadState {
   status: 'loading' | 'error' | 'ready'
@@ -28,15 +30,24 @@ function latestBlock(records: EthRecord[]): EthRecord | null {
 function App() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
   const [activeTab, setActiveTab] = useState<TabId>('transfers')
-  // Task 9 (export + filter chips) reaches the live table through this — DataTable
-  // reports its instance up via onTableReady, this is where it lands.
-  const tableRef = useRef<Table<EthRecord> | null>(null)
-  // Stable identity so DataTable's `useEffect(() => onTableReady?.(table), [table,
-  // onTableReady])` doesn't refire on every App render — an inline arrow prop here would
-  // get a new identity each render and re-trigger that effect continually.
-  const handleTableReady = useCallback((table: Table<EthRecord>) => {
-    tableRef.current = table
+  // ExportButton (rendered next to Tabs, below) reaches the live table through this.
+  // This is `useState`, not a plain ref: DataTable's `onTableReady` fires from inside a
+  // `useEffect`, *after* DataTable's own first commit — a ref would silently hold `null`
+  // through App's initial render (and every render until something else happens to
+  // re-render App), so ExportButton would render as if no table existed until an
+  // unrelated state change (tab switch, etc.) papered over it. `setState` here schedules
+  // the extra render that actually reflects the table becoming available. The instance
+  // itself is a stable reference once created (TanStack mutates it in place, per
+  // DataTable.tsx's own comment), so this settles after exactly one extra render, not a loop.
+  const [table, setTable] = useState<Table<EthRecord> | null>(null)
+  const handleTableReady = useCallback((t: Table<EthRecord>) => {
+    setTable(t)
   }, [])
+  // Global search input lives in the Header's slot (a sibling of DataTable), so its state
+  // has to live here rather than inside DataTable — DataTable receives it back down as a
+  // controlled prop.
+  const [globalFilter, setGlobalFilter] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -53,6 +64,18 @@ function App() {
     return () => {
       cancelled = true
     }
+  }, [])
+
+  // ⌘K / Ctrl-K focuses the global search input from anywhere on the page.
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
   const latest = useMemo(
@@ -90,7 +113,11 @@ function App() {
       <Header
         blockNumber={latest?.block_number ?? null}
         blockTime={latest ? formatTimestamp(latest.block_timestamp) : null}
-      />
+      >
+        {state.status === 'ready' && (
+          <GlobalSearchInput ref={searchInputRef} value={globalFilter} onChange={setGlobalFilter} />
+        )}
+      </Header>
       {state.status === 'ready' && stats && <StatsBand stats={stats} />}
       <main className="app-main">
         {state.status === 'loading' && <p className="app-state">Loading dataset…</p>}
@@ -99,8 +126,19 @@ function App() {
         )}
         {state.status === 'ready' && state.result && (
           <div className="table-card">
-            <Tabs active={activeTab} onChange={setActiveTab} counts={tabCounts} />
-            <DataTable records={tabRecords} tab={activeTab} onTableReady={handleTableReady} />
+            <div className="table-toolbar">
+              <Tabs active={activeTab} onChange={setActiveTab} counts={tabCounts} />
+              {table && latest && (
+                <ExportButton table={table} tab={activeTab} blockNumber={latest.block_number} />
+              )}
+            </div>
+            <DataTable
+              records={tabRecords}
+              tab={activeTab}
+              onTableReady={handleTableReady}
+              globalFilter={globalFilter}
+              onGlobalFilterChange={setGlobalFilter}
+            />
           </div>
         )}
       </main>

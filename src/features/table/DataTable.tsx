@@ -2,16 +2,20 @@ import { useEffect, useState } from 'react'
 import {
   flexRender,
   getCoreRowModel,
+  getFacetedUniqueValues,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  type ColumnFiltersState,
   type PaginationState,
   type SortingState,
   type Table,
 } from '@tanstack/react-table'
 import type { EthRecord } from '../../data/types'
 import { customSortingFns, getColumnsForTab } from './columns'
+import { customFilterFns, tableGlobalFilterFn } from './filters'
+import { FilterChips } from './FilterChips'
 import { pageRange } from './pageRange'
 import type { TabId } from './Tabs'
 import './table.css'
@@ -21,6 +25,9 @@ interface DataTableProps {
   tab: TabId
   /** Lets a parent (Task 9: export + filter chips) reach the live TanStack instance. */
   onTableReady?: (table: Table<EthRecord>) => void
+  /** Controlled from App.tsx, whose Header slot owns the global-search input. */
+  globalFilter: string
+  onGlobalFilterChange: (value: string) => void
 }
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100]
@@ -28,7 +35,7 @@ const DEFAULT_PAGE_SIZE = 50
 
 const fmt = (n: number): string => n.toLocaleString('en-US')
 
-export function DataTable({ records, tab, onTableReady }: DataTableProps) {
+export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFilterChange }: DataTableProps) {
   // `getColumnsForTab` returns one of three module-level constant arrays, so its identity
   // is already stable per tab — no useMemo needed to avoid rebuilding the column set.
   const columns = getColumnsForTab(tab)
@@ -38,44 +45,56 @@ export function DataTable({ records, tab, onTableReady }: DataTableProps) {
     pageIndex: 0,
     pageSize: DEFAULT_PAGE_SIZE,
   })
+  const [columnFiltersState, setColumnFiltersState] = useState<ColumnFiltersState>([])
 
   // Tab switch = a different column set, so sort/filter state from the old tab wouldn't
-  // even apply cleanly (a sort on "Quantity" makes no sense on the transactions tab).
-  // Resetting both here — rather than keeping a per-tab Record<TabId, SortingState> cache
-  // — is a deliberate simplification for this task; page always resets to 1 on switch too.
+  // even apply cleanly (a sort — or a per-column filter — on "Quantity" makes no sense on
+  // the transactions tab). Resetting sort/pagination/column-filters here — rather than
+  // keeping a per-tab cache of each — is a deliberate simplification for this task; page
+  // always resets to 1 on switch too. Global search (`globalFilter`) is *not* reset: it's
+  // a whole-record search independent of which columns the active tab happens to show, so
+  // it's owned by App.tsx and stays put across tab switches.
   //
   // The reset itself happens during render (React's documented "adjusting state when a
   // prop changes" pattern — https://react.dev/learn/you-might-not-need-an-effect), not in
   // a useEffect: an effect only fires *after* this render commits, so `useReactTable`
-  // below would run once with the *new* columns but the *old* tab's sorting state (e.g. a
-  // `value_lossless_tx` sort while transferColumns — which has no such field — is
-  // active), which TanStack logs as a "column does not exist" console error.
+  // below would run once with the *new* columns but the *old* tab's sorting/filter state
+  // (e.g. a `value_lossless_tx` sort or filter while transferColumns — which has no such
+  // field — is active), which TanStack logs as a "column does not exist" console error.
   //
   // Calling setState here schedules the reset for the *next* render, but this render's
-  // `sortingState`/`paginationState` locals are still stale — so `sorting`/`pagination`
-  // below are derived inline as well, guaranteeing the very same render that first sees
-  // the new `tab` also feeds useReactTable state that's valid for the new `columns`.
+  // `sortingState`/`paginationState`/`columnFiltersState` locals are still stale — so
+  // `sorting`/`pagination`/`columnFilters` below are derived inline as well, guaranteeing
+  // the very same render that first sees the new `tab` also feeds useReactTable state
+  // that's valid for the new `columns`.
   const [prevTab, setPrevTab] = useState(tab)
   const tabChanged = tab !== prevTab
   if (tabChanged) {
     setPrevTab(tab)
     setSortingState([])
     setPaginationState((p) => ({ pageIndex: 0, pageSize: p.pageSize }))
+    setColumnFiltersState([])
   }
   const sorting = tabChanged ? [] : sortingState
   const pagination = tabChanged ? { pageIndex: 0, pageSize: paginationState.pageSize } : paginationState
+  const columnFilters = tabChanged ? [] : columnFiltersState
 
   const table = useReactTable({
     data: records,
     columns,
-    state: { sorting, pagination },
+    state: { sorting, pagination, columnFilters, globalFilter },
     onSortingChange: setSortingState,
     onPaginationChange: setPaginationState,
+    onColumnFiltersChange: setColumnFiltersState,
+    onGlobalFilterChange,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
     sortingFns: customSortingFns,
+    filterFns: customFilterFns,
+    globalFilterFn: tableGlobalFilterFn,
   })
 
   // The table instance is a stable ref across re-renders (TanStack creates it once and
@@ -93,6 +112,7 @@ export function DataTable({ records, tab, onTableReady }: DataTableProps) {
 
   return (
     <div id="table-panel" role="tabpanel" aria-labelledby={`table-tab-${tab}`}>
+      <FilterChips table={table} />
       <div className="table-scroll">
         <table className="data-table">
           <thead>

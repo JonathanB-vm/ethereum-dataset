@@ -19,6 +19,11 @@
   --text-faint: #5c6678;
   --accent: #5b8def;
   --accent-muted: rgba(91, 141, 239, 0.14);
+  /* Text painted on top of a solid --accent fill (e.g. the primary Retry button). This
+     theme's --accent is light/mid-tone enough that near-white fails 4.5:1 (~3.23:1) --
+     near-black passes with margin (~5.98:1), so the two themes intentionally land on
+     opposite ends of the scale rather than sharing one "near-white" value. */
+  --text-on-accent: #0b0e14;
   --positive: #3fb68b;
   --negative: #e5636f;
   --caution: #dba53c;
@@ -36,6 +41,8 @@
   --text-faint: #98a1b3;
   --accent: #2f6bdb;
   --accent-muted: rgba(47, 107, 219, 0.1);
+  /* This theme's --accent is dark/saturated enough that white passes 4.5:1 (~4.94:1). */
+  --text-on-accent: #ffffff;
   --positive: #1e8e68;
   --negative: #c9414e;
   --caution: #9c6a0c;

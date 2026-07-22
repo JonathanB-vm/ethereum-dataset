@@ -211,7 +211,11 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
 
       <div className="table-footer">
         <span className="table-footer__status">
-          {totalRows === 0 ? 'No records' : `Showing ${fmt(rangeStart)}–${fmt(rangeEnd)} of ${fmt(totalRows)}`}
+          {/* A bare count ("0 records"), not a message -- EmptyState's own copy ("No records
+              match your filters" / "No records in this view") already owns the "why is this
+              empty" explanation directly above; the footer's job stays the same in every
+              state: report a count. */}
+          {totalRows === 0 ? '0 records' : `Showing ${fmt(rangeStart)}–${fmt(rangeEnd)} of ${fmt(totalRows)}`}
         </span>
         <div className="table-footer__pager">
           <label className="table-footer__size">

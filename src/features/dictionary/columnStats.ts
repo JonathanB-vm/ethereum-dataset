@@ -33,6 +33,10 @@ export function computeColumnStats(records: EthRecord[], field: keyof EthRecord)
     const value = record[field]
     if (value == null) continue
     nonNullCount++
+    // Lowercase 'true'/'false' — an internal grouping key for this function's own distinct-
+    // count/min-max logic only, never rendered. Deliberately NOT `enumDisplayValue`'s
+    // capitalized 'True'/'False' (filters.ts) — that convention is for the filter checkbox
+    // UI's user-facing labels, a different concern from this purely internal key.
     const str = typeof value === 'boolean' ? (value ? 'true' : 'false') : String(value)
     distinctValues.add(str)
     numericValues.push(str)

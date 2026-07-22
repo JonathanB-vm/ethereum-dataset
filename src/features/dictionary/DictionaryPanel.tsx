@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { COLUMNS, getColumnMeta, type ColumnMeta } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
+import { weiToEth, weiToGwei } from '../../data/transform'
+import { HUMAN_UNIT } from '../table/rowDetailFields'
 import { computeColumnStats } from './columnStats'
 import { DictionaryPanelContext, useDictionaryPanel } from './dictionaryPanelContext'
 import './dictionary.css'
@@ -114,6 +116,41 @@ function SourceBadge({ source }: { source: ColumnMeta['source'] }) {
   return <span className={`source-badge ${SOURCE_BADGE_CLASS[source]}`}>{SOURCE_LABELS[source]}</span>
 }
 
+/**
+ * `computeColumnStats`'s min/max are always the field's raw stored value (wei, for the
+ * five wei-scale fields) — reusing `RowDetail`'s own `HUMAN_UNIT` field→unit map (rather
+ * than duplicating it) to convert that raw stat display-side, the same way the table's
+ * Gas Price/Value ETH columns and `RowDetail`'s own raw+human rendering already do.
+ * Returns `null` for fields with no display unit (`HUMAN_UNIT` doesn't cover them), so the
+ * caller falls back to showing the raw value un-annotated.
+ */
+function convertStatValue(field: keyof EthRecord, raw: string): { value: string; unit: string } | null {
+  const unit = HUMAN_UNIT[field]
+  if (!unit) return null
+  const converted = unit === 'ETH' ? weiToEth(raw) : unit === 'Gwei' ? weiToGwei(raw) : null
+  return converted != null ? { value: converted, unit } : null
+}
+
+/** Min/Max stat row: unit-converted value + unit label when the field has a display unit
+ *  (e.g. "0.0586 Gwei"), with the raw stored value always kept available via `title` and a
+ *  faint secondary line — consistent with `RowDetail`'s raw-primary/human-secondary pattern,
+ *  just with the roles swapped (converted value leads here, since a bare "58631115" reads as
+ *  meaningless without the Gwei scale a stats summary is meant to convey at a glance). */
+function StatValue({ field, raw }: { field: keyof EthRecord; raw: string }) {
+  const converted = convertStatValue(field, raw)
+  if (!converted) {
+    return <span className="dictionary-stat__value dictionary-stat__value--mono">{raw}</span>
+  }
+  return (
+    <span className="dictionary-stat__value-group">
+      <span className="dictionary-stat__value dictionary-stat__value--mono" title={`${raw} (raw)`}>
+        {converted.value} {converted.unit}
+      </span>
+      <span className="dictionary-stat__value-raw">raw: {raw}</span>
+    </span>
+  )
+}
+
 function FillBar({ value }: { value: number }) {
   const pct = Math.round(value * 100)
   return (
@@ -201,13 +238,17 @@ function FieldDetail({ field, meta, records }: { field: keyof EthRecord; meta: C
         {stats.min != null && (
           <div className="dictionary-stat">
             <dt className="dictionary-stat__label">Min</dt>
-            <dd className="dictionary-stat__value dictionary-stat__value--mono">{stats.min}</dd>
+            <dd>
+              <StatValue field={field} raw={stats.min} />
+            </dd>
           </div>
         )}
         {stats.max != null && (
           <div className="dictionary-stat">
             <dt className="dictionary-stat__label">Max</dt>
-            <dd className="dictionary-stat__value dictionary-stat__value--mono">{stats.max}</dd>
+            <dd>
+              <StatValue field={field} raw={stats.max} />
+            </dd>
           </div>
         )}
       </dl>

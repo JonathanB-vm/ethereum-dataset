@@ -1,4 +1,4 @@
-import { formatCount as fmtInt, formatTimestamp } from '../../data/transform'
+import { formatCount as fmtInt } from '../../data/transform'
 import type { DatasetStats } from './computeStats'
 import './stats.css'
 
@@ -86,12 +86,12 @@ export function StatsBand({ stats }: StatsBandProps) {
       </div>
 
       <div className="stat-tile">
-        <span className="stat-tile__label">Block</span>
-        <span className="stat-tile__value">
-          {stats.blockNumber != null ? `#${fmtInt(stats.blockNumber)}` : '—'}
-        </span>
+        <span className="stat-tile__label">Blocks</span>
+        <span className="stat-tile__value">{fmtInt(stats.blockCount)}</span>
         <span className="stat-tile__sub">
-          {stats.blockTimestamp != null ? formatTimestamp(stats.blockTimestamp) : ' '}
+          {stats.blockMin != null && stats.blockMax != null
+            ? `${fmtInt(stats.blockMin)}–${fmtInt(stats.blockMax)}`
+            : ' '}
         </span>
       </div>
     </section>

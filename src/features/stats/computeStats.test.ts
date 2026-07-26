@@ -60,7 +60,7 @@ describe('computeStats', () => {
 
   it('handles empty input', () => {
     const s = computeStats([])
-    expect(s.blockNumber).toBeNull()
+    expect(s.blockMin).toBeNull()
     expect(s.gasPriceMinGwei).toBeNull()
     expect(s.totalEthMoved).toBe('0')
   })
@@ -74,5 +74,38 @@ describe('computeStats', () => {
     expect(s.totalEthMoved).toBe('1')
     expect(s.gasPriceMinGwei).toBe('2')
     expect(s.gasPriceMaxGwei).toBe('2')
+  })
+})
+
+describe('block range across a multi-block dataset', () => {
+  const at = (block: number, ts: string): EthRecord => mk({ block_number: block, block_timestamp: ts })
+
+  it('reports distinct block count and min/max, regardless of row order', () => {
+    const stats = computeStats([
+      at(25534202, '2026-07-14 23:35:35+00:00'),
+      at(25534200, '2026-07-14 23:35:11+00:00'),
+      at(25534202, '2026-07-14 23:35:35+00:00'),
+      at(25534201, '2026-07-14 23:35:23+00:00'),
+    ])
+    expect(stats.blockCount).toBe(3)
+    expect(stats.blockMin).toBe(25534200)
+    expect(stats.blockMax).toBe(25534202)
+  })
+
+  it('reports the earliest and latest timestamps, not just the last row seen', () => {
+    const stats = computeStats([
+      at(25534202, '2026-07-14 23:35:35+00:00'),
+      at(25534200, '2026-07-14 23:35:11+00:00'),
+    ])
+    expect(stats.timeStart).toBe('2026-07-14 23:35:11+00:00')
+    expect(stats.timeEnd).toBe('2026-07-14 23:35:35+00:00')
+  })
+
+  it('is empty-safe', () => {
+    const stats = computeStats([])
+    expect(stats.blockCount).toBe(0)
+    expect(stats.blockMin).toBeNull()
+    expect(stats.blockMax).toBeNull()
+    expect(stats.timeStart).toBeNull()
   })
 })

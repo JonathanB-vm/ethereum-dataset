@@ -10,10 +10,11 @@ interface ExportButtonProps {
   table: Table<EthRecord>
   tab: TabId
   /** Derived by the caller (App.tsx) from the loaded dataset — never hard-coded here. */
-  blockNumber: number
+  blockMin: number | null
+  blockMax: number | null
 }
 
-export function ExportButton({ table, tab, blockNumber }: ExportButtonProps) {
+export function ExportButton({ table, tab, blockMin, blockMax }: ExportButtonProps) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -59,7 +60,13 @@ export function ExportButton({ table, tab, blockNumber }: ExportButtonProps) {
       : (table.getVisibleLeafColumns().map((c) => c.id) as (keyof EthRecord)[])
 
     const csv = buildCsv(records, fields)
-    const filename = `eth-block${blockNumber}-${tab}-${records.length}rows.csv`
+    const blockPart =
+      blockMin == null || blockMax == null
+        ? 'eth'
+        : blockMin === blockMax
+          ? `eth-block${blockMin}`
+          : `eth-blocks${blockMin}-${blockMax}`
+    const filename = `${blockPart}-${tab}-${records.length}rows.csv`
     downloadCsv(csv, filename)
   }
 

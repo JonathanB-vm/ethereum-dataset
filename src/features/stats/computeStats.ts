@@ -10,8 +10,13 @@ export interface DatasetStats {
   gasPriceMinGwei: string | null
   gasPriceMaxGwei: string | null
   uniqueAddresses: number // union of from/to/from_tx/to_tx/address
-  blockNumber: number | null
-  blockTimestamp: string | null
+  /** Distinct blocks present — reported rather than `blockMax - blockMin + 1`, so a
+   *  dataset with gaps is described honestly. */
+  blockCount: number
+  blockMin: number | null
+  blockMax: number | null
+  timeStart: string | null
+  timeEnd: string | null
 }
 
 interface TxAggregate {
@@ -25,8 +30,11 @@ export function computeStats(records: EthRecord[]): DatasetStats {
   const eventTypeCountMap = new Map<string, number>()
   const txMap = new Map<string, TxAggregate>()
   const addresses = new Set<string>()
-  let latestBlockNumber: number | null = null
-  let latestBlockTimestamp: string | null = null
+  const blocks = new Set<number>()
+  let blockMin: number | null = null
+  let blockMax: number | null = null
+  let timeStart: string | null = null
+  let timeEnd: string | null = null
 
   for (const r of records) {
     if (r.is_token_transfer) {
@@ -60,9 +68,14 @@ export function computeStats(records: EthRecord[]): DatasetStats {
     if (r.from_address_tx != null) addresses.add(r.from_address_tx)
     if (r.to_address_tx != null) addresses.add(r.to_address_tx)
 
-    if (latestBlockNumber === null || r.block_number > latestBlockNumber) {
-      latestBlockNumber = r.block_number
-      latestBlockTimestamp = r.block_timestamp
+    blocks.add(r.block_number)
+    if (blockMin === null || r.block_number < blockMin) blockMin = r.block_number
+    if (blockMax === null || r.block_number > blockMax) blockMax = r.block_number
+    // ISO-8601 with a fixed +00:00 offset sorts correctly as a plain string, so no Date
+    // parsing (and no timezone reinterpretation) is needed here.
+    if (r.block_timestamp !== '') {
+      if (timeStart === null || r.block_timestamp < timeStart) timeStart = r.block_timestamp
+      if (timeEnd === null || r.block_timestamp > timeEnd) timeEnd = r.block_timestamp
     }
   }
 
@@ -92,7 +105,10 @@ export function computeStats(records: EthRecord[]): DatasetStats {
     gasPriceMinGwei: gasPriceMin === null ? null : weiToGwei(gasPriceMin.toString()),
     gasPriceMaxGwei: gasPriceMax === null ? null : weiToGwei(gasPriceMax.toString()),
     uniqueAddresses: addresses.size,
-    blockNumber: latestBlockNumber,
-    blockTimestamp: latestBlockTimestamp,
+    blockCount: blocks.size,
+    blockMin,
+    blockMax,
+    timeStart,
+    timeEnd,
   }
 }

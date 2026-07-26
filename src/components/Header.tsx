@@ -2,8 +2,12 @@ import type { ReactNode } from 'react'
 import { ThemeToggle } from './ThemeToggle'
 
 interface HeaderProps {
-  blockNumber: number | null
-  blockTime: string | null
+  /** Distinct blocks in the loaded dataset. */
+  blockCount: number
+  blockMin: number | null
+  blockMax: number | null
+  /** Formatted time span, shown on hover. */
+  timeRange: string | null
   children?: ReactNode // right-side slot: global search etc.
 }
 
@@ -28,7 +32,7 @@ function EthMark() {
   )
 }
 
-export function Header({ blockNumber, blockTime, children }: HeaderProps) {
+export function Header({ blockCount, blockMin, blockMax, timeRange, children }: HeaderProps) {
   return (
     <header className="app-header">
       <div className="app-header__brand">
@@ -40,10 +44,14 @@ export function Header({ blockNumber, blockTime, children }: HeaderProps) {
           <p className="app-header__sub">BigQuery · blockchain_analytics_ethereum_mainnet_us</p>
         </div>
       </div>
-      {blockNumber != null && (
-        <span className="block-badge" title={blockTime ?? undefined}>
+      {blockCount > 0 && blockMin != null && blockMax != null && (
+        <span className="block-badge" title={timeRange ?? undefined}>
           <span className="block-badge__dot" aria-hidden="true" />
-          Block #{blockNumber.toLocaleString('en-US')}
+          {/* Reports the block *count* alongside the range: with a gap in the export,
+              "100 blocks · 25,534,200–25,534,299" stays true where a bare range wouldn't. */}
+          {blockCount === 1
+            ? `Block #${blockMin.toLocaleString('en-US')}`
+            : `${blockCount.toLocaleString('en-US')} blocks · ${blockMin.toLocaleString('en-US')}–${blockMax.toLocaleString('en-US')}`}
         </span>
       )}
       <div className="app-header__actions">

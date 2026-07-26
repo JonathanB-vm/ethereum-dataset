@@ -8,7 +8,12 @@ const defaultProvider = calldataProvider()
 interface CalldataFieldProps {
   txHash: string
   label: string
-  /** Injectable so tests don't have to stub `fetch`. */
+  /**
+   * Injectable so tests don't have to stub `fetch`. `provider` is a dependency of the
+   * fetch effect below, so callers must keep it referentially stable across renders (the
+   * module-level default already is) — passing a new object literal on every render would
+   * retrigger the fetch every render instead of only on tx-hash change.
+   */
   provider?: CalldataProvider
 }
 

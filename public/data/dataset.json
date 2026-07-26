@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "shardScheme": "txhash-first-byte",
+  "rows": 74889,
+  "skippedRows": 0,
+  "columns": 34,
+  "blockMin": 25534200,
+  "blockMax": 25534299,
+  "timeStart": "2026-07-14 23:35:11+00:00",
+  "timeEnd": "2026-07-14 23:54:59+00:00",
+  "calldataTransactions": 12220,
+  "calldataShards": 256
+}

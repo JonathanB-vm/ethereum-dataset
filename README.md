@@ -1,8 +1,9 @@
 # Ethereum Dataset Explorer
 
-A single-page explorer for a snapshot of Ethereum mainnet activity: token transfers and
-transactions at block **25,534,300**, browsable in a sortable, filterable data table
-with live dataset statistics, a full data dictionary, and CSV export.
+A single-page explorer for 100 blocks of Ethereum mainnet activity — blocks
+**25,534,200–25,534,299**, spanning 19m 48s on 2026-07-14 (23:35:11–23:54:59 UTC) —
+browsable in a sortable, filterable data table with live dataset statistics, a full data
+dictionary, and CSV export.
 
 ## Dataset provenance
 
@@ -12,11 +13,17 @@ The data comes from Google BigQuery's public
 - **`token_transfers`** — ERC-20 / ERC-721 transfer events
 - **`transactions`** — the enclosing mainnet transactions
 
-The export (`public/data/analytics_25534300.csv`) is a 600-row snapshot centered on block
-25,534,300: 504 token-transfer rows and 96 transaction rows across 35 columns. Large
-numeric fields (wei values, gas prices, token quantities) are kept as **lossless decimal
-strings** end to end — the app parses and compares them with `BigInt`, never `Number`, so
-256-bit values survive intact from BigQuery to the exported CSV.
+The source export (`analytics_25534200_25534299.csv`, 2.19 GB, gitignored) covers 100
+blocks: 74,889 rows — 43,941 token-transfer rows and 30,948 transaction rows — across 35
+documented columns. 96.9% of the export's bytes are a single column, `input_tx` (contract
+calldata), which is duplicated across every row of a transaction. A prep script
+(`npm run data:prep`) strips that column out of the row stream, dedupes it per
+transaction, and ships it separately — see **Data pipeline** below. The browser therefore
+loads 34 columns per row plus `input_tx` on demand.
+
+Large numeric fields (wei values, gas prices, token quantities) are kept as **lossless
+decimal strings** end to end — the app parses and compares them with `BigInt`, never
+`Number`, so 256-bit values survive intact from BigQuery to the exported CSV.
 
 ## Quickstart
 
@@ -32,28 +39,68 @@ npm run preview   # serve the production build
 
 - **Stats band** — six tiles computed live from the loaded records: record split
   (tx vs. transfers), token standards, total ETH moved, gas-price range, unique
-  addresses, and the block number/timestamp.
+  addresses, and blocks (count + range).
 - **Three views** — curated *Token Transfers* and *Transactions* tabs (unit-converted
-  columns: ETH, Gwei), plus an *All Records* tab showing all 35 columns as raw stored
-  values.
+  columns: ETH, Gwei, plus a sortable, range-filterable **Block** column), plus an
+  *All Records* tab showing all 34 loaded columns as raw stored values.
 - **Table** — per-column sorting (BigInt-aware for numeric strings), per-column filters
-  (text / range / multi-select) with removable filter chips, global search (⌘K / Ctrl-K),
-  pagination, and per-row detail expansion with raw + human-readable values.
-- **Data dictionary** — a slide-over panel describing all 35 fields (source table, type,
-  description) with live per-column stats: fill rate, distinct count, min/max. Every
-  column header's ⓘ opens the same panel scoped to that field.
+  (text / range / multi-select) with removable filter chips, debounced global search
+  (⌘K / Ctrl-K) that stays responsive at 74,889 rows, pagination, and per-row detail
+  expansion with raw + human-readable values.
+- **Input Data on demand** — expanding a row fetches that transaction's calldata
+  (`input_tx`) lazily through `CalldataProvider`, showing `Loading…` then the value; a
+  plain value-transfer transaction resolves to `0x` without a network round-trip, since
+  only transactions with real calldata are shipped as artifacts.
+- **Data dictionary** — a slide-over panel describing all 35 documented fields (source
+  table, type, description) with live per-column stats: fill rate, distinct count,
+  min/max. `input_tx` shows "Fetched on demand" instead of a fill-rate bar, since its
+  value isn't held in memory. Every column header's ⓘ opens the same panel scoped to
+  that field.
 - **CSV export** — the current view (filtered + sorted, all pages) as CSV: either the
-  visible columns or all 35, with lossless numeric strings. Exports are value-lossless
-  but format-normalized: numeric `.0` suffixes from the source CSV aren't reproduced, and
-  line endings may differ from the original file.
+  visible columns or all 34 loaded columns, with lossless numeric strings. Exports are
+  value-lossless but format-normalized: numeric `.0` suffixes from the source CSV aren't
+  reproduced, and line endings may differ from the original file.
 - **Dual theme** — dark (default) and light, persisted across reloads.
+
+## Data pipeline
+
+The 2.19 GB source export never ships to the browser directly. A prep script turns it
+into the artifacts the app actually loads (see the **Architecture** diagram below for
+where each artifact fits):
+
+```bash
+npm run data:prep <source.csv>   # regenerates public/data/
+```
+
+The script streams the source row by row — it is never held in memory — and:
+
+- projects each row down to the 34 columns the browser loads, leaving `input_tx` out;
+- collapses whitespace in `access_list_tx`, a cosmetic normalization of a Python/numpy
+  repr that BigQuery exports with literal newlines and indentation;
+- accumulates `input_tx` values into a `Map`, keyed by transaction hash, skipping plain
+  `0x` value-transfers (28,422 of the source's 40,642 transactions carry no calldata);
+  deduplicated this is only ~30 MB, versus 2.12 GB duplicated across every row;
+- writes that map out sharded by the transaction hash's first hex byte
+  (`calldata/<xx>.json.gz`, 256 shards) so the browser can derive a shard's filename from
+  a hash it already has, with no index file to fetch first;
+- writes `dataset.json`, a manifest of row/column counts, the block range, and the time
+  span, which the app reads to render the header badge and stats tiles without scanning
+  every row.
+
+Fetching calldata relies on `DecompressionStream`, which requires Chrome 80+, Firefox
+113+, or Safari 16.4+.
 
 ## Architecture
 
 ```
-public/data/analytics_25534300.csv     ← BigQuery export (the current data source)
+analytics_*.csv (2.19 GB, gitignored)
+        │  npm run data:prep
+        ▼
+public/data/rows.csv.gz          ← 74,889 rows × 34 columns
+public/data/calldata/<xx>.json.gz ← input_tx, per transaction
         │
-src/data/csvProvider.ts                ← fetch + PapaParse + row validation
+src/data/csvProvider.ts     ← fetch + gunzip + PapaParse + interning
+src/data/calldataProvider.ts ← lazy per-row calldata
         │        implements
 src/data/provider.ts   (DataProvider)  ← the data-layer seam
         │
@@ -67,13 +114,15 @@ src/App.tsx                            ← load state, tabs, theme, panels
 ```
 
 **Data refresh:** the UI depends only on the `DataProvider` interface
-(`src/data/provider.ts`). A future scheduled job (e.g. a BigQuery cron export) replaces
-`public/data/*.csv` — or swaps in a provider that queries an API directly — without
-touching any component. Everything downstream (stats, tab counts, block badge, dictionary
-stats) is derived from the loaded records at runtime, never hard-coded.
+(`src/data/provider.ts`). A future scheduled job (e.g. a BigQuery cron export followed by
+`npm run data:prep`) replaces `public/data/*` — or swaps in a provider that queries an
+API directly — without touching any component. Everything downstream (stats, tab counts,
+block badge, dictionary stats) is derived from the loaded records at runtime, never
+hard-coded.
 
 ## Testing
 
-`npm test` runs unit tests across 11 Vitest suites covering the dictionary, CSV parsing
-and row validation, BigInt transforms, dataset/column stats, filter functions, pagination
-ranges, column definitions, and CSV export.
+`npm test` runs 157 unit tests across 18 Vitest suites covering the dictionary, CSV
+parsing and row validation, gzip decoding, the dataset-prep helpers, the calldata
+provider, BigInt transforms, dataset/column stats, filter functions, debounced search,
+pagination ranges, column definitions, and CSV export.

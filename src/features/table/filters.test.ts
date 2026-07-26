@@ -36,7 +36,6 @@ function makeRecord(overrides: Partial<EthRecord> = {}): EthRecord {
     value_lossless_tx: null,
     gas_tx: null,
     gas_price_tx: null,
-    input_tx: null,
     max_fee_per_gas_tx: null,
     max_priority_fee_per_gas_tx: null,
     type_tx: null,

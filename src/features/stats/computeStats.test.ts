@@ -8,7 +8,7 @@ const BASE: EthRecord = {
   address: null, event_type: null, event_hash: null, event_signature: null,
   operator_address: null, from_address: null, to_address: null, token_id: null,
   quantity: null, removed: null, nonce_tx: null, from_address_tx: null, to_address_tx: null,
-  value_tx: null, value_lossless_tx: null, gas_tx: null, gas_price_tx: null, input_tx: null,
+  value_tx: null, value_lossless_tx: null, gas_tx: null, gas_price_tx: null,
   max_fee_per_gas_tx: null, max_priority_fee_per_gas_tx: null, type_tx: null,
   chain_id_tx: null, access_list_tx: null, r_tx: null, s_tx: null, v_tx: null,
   y_parity_tx: null, is_token_transfer: false,

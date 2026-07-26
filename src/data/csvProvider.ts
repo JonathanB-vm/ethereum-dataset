@@ -58,7 +58,6 @@ export function parseCsv(csvText: string): LoadResult {
       value_lossless_tx: str(row.value_lossless_tx),
       gas_tx: int(row.gas_tx),
       gas_price_tx: str(row.gas_price_tx),
-      input_tx: str(row.input_tx),
       max_fee_per_gas_tx: str(row.max_fee_per_gas_tx),
       max_priority_fee_per_gas_tx: str(row.max_priority_fee_per_gas_tx),
       type_tx: int(row.type_tx),

@@ -1,5 +1,5 @@
 import type { FilterFn } from '@tanstack/react-table'
-import { COLUMNS } from '../../data/dictionary'
+import { LOADED_COLUMNS } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 import { decimalToWei, toBigInt } from '../../data/transform'
 
@@ -59,11 +59,11 @@ export function enumFilter(selected: string[], value: string | number | boolean 
   return selected.includes(enumDisplayValue(value))
 }
 
-const ALL_FIELDS = COLUMNS.map((c) => c.field)
+const ALL_FIELDS = LOADED_COLUMNS.map((c) => c.field)
 
 /**
- * Global search — case-insensitive substring match across all 35 dictionary fields of a
- * record, regardless of which columns the active tab happens to display.
+ * Global search — case-insensitive substring match across all 34 loaded dictionary fields
+ * of a record, regardless of which columns the active tab happens to display.
  */
 export function globalFilterFn(record: EthRecord, query: string): boolean {
   const q = query.trim().toLowerCase()

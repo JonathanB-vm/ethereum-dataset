@@ -26,7 +26,6 @@ export interface EthRecord {
   value_lossless_tx: string | null // wei, full 256-bit precision, string
   gas_tx: number | null
   gas_price_tx: string | null // wei
-  input_tx: string | null
   max_fee_per_gas_tx: string | null
   max_priority_fee_per_gas_tx: string | null
   type_tx: number | null

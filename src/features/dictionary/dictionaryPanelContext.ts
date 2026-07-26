@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { EthRecord } from '../../data/types'
+import type { DictionaryField } from '../../data/dictionary'
 
 /**
  * Split out from DictionaryPanel.tsx so that file only exports components (satisfies the
@@ -7,7 +7,7 @@ import type { EthRecord } from '../../data/types'
  * object and its consumer hook, neither of which is a component.
  */
 export interface DictionaryPanelContextValue {
-  openField: (field: keyof EthRecord) => void
+  openField: (field: DictionaryField) => void
   openFull: () => void
 }
 

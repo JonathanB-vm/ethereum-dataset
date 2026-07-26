@@ -402,3 +402,21 @@
   line-height: 1.5;
   color: var(--text-muted);
 }
+
+.dictionary-field__unavailable {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dictionary-entry__on-demand {
+  display: inline-block;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}

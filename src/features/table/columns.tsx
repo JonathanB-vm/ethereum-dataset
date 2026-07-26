@@ -1,5 +1,5 @@
 import { createColumnHelper, type Column, type ColumnDef, type SortingFn } from '@tanstack/react-table'
-import { getColumnMeta, COLUMNS, type ColumnMeta } from '../../data/dictionary'
+import { getColumnMeta, LOADED_COLUMNS, type ColumnMeta, type DictionaryField } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 import { compareNumericStrings } from '../../data/transform'
 import { DictionaryInfoTrigger } from '../dictionary/DictionaryPanel'
@@ -37,7 +37,7 @@ const bignumSortingFn: SortingFn<EthRecord> = (rowA, rowB, columnId) => {
 /** Passed to `useReactTable({ sortingFns })` in DataTable.tsx. */
 export const customSortingFns = { bignum: bignumSortingFn }
 
-function metaLabel(field: keyof EthRecord): string {
+function metaLabel(field: DictionaryField): string {
   return getColumnMeta(field)?.label ?? String(field)
 }
 
@@ -52,9 +52,9 @@ const DISPLAY_LABEL_OVERRIDES: Partial<Record<keyof EthRecord, string>> = {
   gas_price_tx: 'Gas Price Gwei',
 }
 
-export function columnDisplayLabel(field: keyof EthRecord, tab: TabId): string {
+export function columnDisplayLabel(field: DictionaryField, tab: TabId): string {
   if (tab === 'all') return metaLabel(field)
-  return DISPLAY_LABEL_OVERRIDES[field] ?? metaLabel(field)
+  return DISPLAY_LABEL_OVERRIDES[field as keyof EthRecord] ?? metaLabel(field)
 }
 
 const TX_TYPE_LABELS: Record<number, string> = { 0: 'Legacy', 1: 'EIP-2930', 2: 'EIP-1559' }
@@ -94,7 +94,7 @@ const helper = createColumnHelper<EthRecord>()
  * `'rangeEth'`/`'rangeGwei'` (see columns below) — it tells FilterControls to label its
  * Min/Max inputs "(ETH)"/"(Gwei)" so the unit a bound is compared in is never a guess.
  */
-function header(tab: TabId, field: keyof EthRecord, rangeUnit?: string) {
+function header(tab: TabId, field: DictionaryField, rangeUnit?: string) {
   const displayLabel = columnDisplayLabel(field, tab)
   const meta = getColumnMeta(field)
   const filterFn = meta ? filterFnForKind(meta.kind) : undefined
@@ -110,7 +110,7 @@ function header(tab: TabId, field: keyof EthRecord, rangeUnit?: string) {
 }
 
 /** The registered filterFn (string key into filters.ts's `customFilterFns`) for a field's dictionary `kind`, or undefined for `timestamp`. */
-function filterFor(field: keyof EthRecord) {
+function filterFor(field: DictionaryField) {
   const meta = getColumnMeta(field)
   return meta ? filterFnForKind(meta.kind) : undefined
 }
@@ -233,13 +233,14 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
 ] as ColumnDef<EthRecord>[]
 
 // ---------- all-records tab ----------
-// Every one of the 35 dictionary columns, in CSV order, shown as raw (mono, truncated)
-// values — this tab is the "inspect the export as-is" escape hatch, so it deliberately
-// skips unit conversion and the curated tabs' friendly labels: columnDisplayLabel('all')
-// never applies DISPLAY_LABEL_OVERRIDES (a "Value ETH" header over raw-wei cells would
-// misstate the unit by 10^18).
+// Every one of the 34 loaded dictionary columns (`input_tx` is fetched per row — see
+// RowDetail), in CSV order, shown as raw (mono, truncated) values — this tab is the
+// "inspect the export as-is" escape hatch, so it deliberately skips unit conversion and the
+// curated tabs' friendly labels: columnDisplayLabel('all') never applies
+// DISPLAY_LABEL_OVERRIDES (a "Value ETH" header over raw-wei cells would misstate the unit
+// by 10^18).
 
-const allColumns: ColumnDef<EthRecord>[] = COLUMNS.map((meta) =>
+const allColumns: ColumnDef<EthRecord>[] = LOADED_COLUMNS.map((meta) =>
   helper.accessor(meta.field, {
     header: header('all', meta.field),
     cell: (info) => <RawCell value={info.getValue()} />,

@@ -189,7 +189,7 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
               <tr key={headerGroup.id}>
                 {/* Chevron column: rendered directly here (not a TanStack ColumnDef) so it
                     never appears in `table.getVisibleLeafColumns()` — ExportButton's CSV
-                    column list and FilterChips stay exactly the 35 dictionary fields. */}
+                    column list and FilterChips stay exactly the 34 loaded dictionary fields. */}
                 <th className="row-expander-header" aria-hidden="true" />
                 {headerGroup.headers.map((h) => {
                   const sorted = h.column.getIsSorted()

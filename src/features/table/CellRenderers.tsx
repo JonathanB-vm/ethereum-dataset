@@ -126,7 +126,7 @@ export function BadgeCell({ label }: BadgeCellProps) {
 /**
  * The "All Records" tab shows every raw CSV value verbatim. It doesn't know a column's
  * `kind`, so it never unit-converts — it truncates long strings the same way hex gets
- * truncated elsewhere, without the copy affordance (35 columns of copy buttons would be
+ * truncated elsewhere, without the copy affordance (34 columns of copy buttons would be
  * more noise than signal; the curated tabs are where copy earns its keep).
  */
 export function RawCell({ value }: { value: unknown }) {

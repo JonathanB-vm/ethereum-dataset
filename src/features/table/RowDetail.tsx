@@ -34,9 +34,11 @@ function rawString(value: unknown): string | null {
 /**
  * Expanded panel rendered under a table row (see DataTable.tsx) listing every one of the
  * 35 dictionary fields for that record, grouped into three sections (`GROUPS`, in
- * `./rowDetailFields`). Each field shows its full raw value (mono, wrap-anywhere, copyable)
- * and, where the field's kind allows, a human-readable rendering beside it (ETH/Gwei/
- * formatted timestamp).
+ * `./rowDetailFields`). Each loaded field shows its full raw value (mono, wrap-anywhere,
+ * copyable) and, where the field's kind allows, a human-readable rendering beside it (ETH/
+ * Gwei/formatted timestamp). The one on-demand field (`input_tx`) isn't held in memory —
+ * see `getColumnMeta`'s `availability` — so it renders a "Not loaded" placeholder here
+ * instead (Task 8 replaces this with a real per-row fetch).
  */
 export function RowDetail({ record }: RowDetailProps) {
   return (
@@ -47,10 +49,20 @@ export function RowDetail({ record }: RowDetailProps) {
           <div className="row-detail__grid">
             {group.fields.map((field) => {
               const meta = getColumnMeta(field)
-              const raw = rawString(record[field])
-              const humanFn = raw != null ? HUMAN_READABLE[field] : undefined
+              if (meta?.availability === 'on-demand') {
+                return (
+                  <div key={String(field)} className="row-detail__field">
+                    <span className="row-detail__field-label">{meta.label}</span>
+                    <span className="row-detail__field-value row-detail__field-value--empty">
+                      Not loaded
+                    </span>
+                  </div>
+                )
+              }
+              const raw = rawString(record[field as keyof EthRecord])
+              const humanFn = raw != null ? HUMAN_READABLE[field as keyof EthRecord] : undefined
               const human = humanFn ? humanFn(raw as string) : null
-              const unit = HUMAN_UNIT[field]
+              const unit = HUMAN_UNIT[field as keyof EthRecord]
               return (
                 <div key={String(field)} className="row-detail__field">
                   <span className="row-detail__field-label">{meta?.label ?? String(field)}</span>
@@ -58,10 +70,10 @@ export function RowDetail({ record }: RowDetailProps) {
                     <span className="row-detail__field-value row-detail__field-value--empty">–</span>
                   ) : (
                     <span className="row-detail__field-value">
-                      {/* Long blobs (input_tx calldata, access lists, r/s signatures) render
-                          head…tail so one field can't blow the panel up vertically. The full
-                          value stays reachable two ways: hover (`title`) and copy — the
-                          CopyButton always receives the untruncated raw string. */}
+                      {/* Long blobs (access lists, r/s signatures) render head…tail so one
+                          field can't blow the panel up vertically. The full value stays
+                          reachable two ways: hover (`title`) and copy — the CopyButton
+                          always receives the untruncated raw string. */}
                       <span className="row-detail__field-raw" title={raw}>
                         {truncateMiddle(raw)}
                       </span>

@@ -9,7 +9,7 @@ interface GlobalSearchInputProps {
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? navigator.userAgent)
 
-/** Lives in Header's right-side slot (App.tsx) — global, whole-record search across the full 35-field dictionary, independent of which tab/columns are on screen. */
+/** Lives in Header's right-side slot (App.tsx) — global, whole-record search across all 34 loaded dictionary fields, independent of which tab/columns are on screen. */
 export function GlobalSearchInput({ value, onChange, ref }: GlobalSearchInputProps) {
   return (
     <div className="global-search">

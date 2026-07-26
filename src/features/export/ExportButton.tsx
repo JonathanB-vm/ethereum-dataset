@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Table } from '@tanstack/react-table'
-import { COLUMNS } from '../../data/dictionary'
+import { LOADED_COLUMNS } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 import type { TabId } from '../table/Tabs'
 import { buildCsv, downloadCsv } from './exportCsv'
@@ -55,7 +55,7 @@ export function ExportButton({ table, tab, blockNumber }: ExportButtonProps) {
     const rows = table.getSortedRowModel().rows
     const records = rows.map((r) => r.original)
     const fields = allColumns
-      ? COLUMNS.map((c) => c.field)
+      ? LOADED_COLUMNS.map((c) => c.field)
       : (table.getVisibleLeafColumns().map((c) => c.id) as (keyof EthRecord)[])
 
     const csv = buildCsv(records, fields)
@@ -92,7 +92,7 @@ export function ExportButton({ table, tab, blockNumber }: ExportButtonProps) {
             className="export-button__item"
             onClick={() => handleExport(true)}
           >
-            All 35 columns
+            All 34 columns
           </button>
         </div>
       )}

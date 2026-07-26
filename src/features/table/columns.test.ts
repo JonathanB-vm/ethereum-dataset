@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { ReactElement } from 'react'
 import type { Column } from '@tanstack/react-table'
 import { columnDisplayLabel, getColumnsForTab } from './columns'
-import { COLUMNS } from '../../data/dictionary'
+import { LOADED_COLUMNS } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 
 /** Every accessor column here is built with `helper.accessor(field, {...})`, which sets
@@ -19,10 +19,11 @@ function fields(defs: ReturnType<typeof getColumnsForTab>): (keyof EthRecord)[] 
 }
 
 describe('getColumnsForTab', () => {
-  it("'all' returns exactly the 35 dictionary columns, in CSV order", () => {
+  it("'all' returns exactly the 34 loaded dictionary columns, in CSV order", () => {
     const defs = getColumnsForTab('all')
-    expect(defs).toHaveLength(35)
-    expect(fields(defs)).toEqual(COLUMNS.map((c) => c.field))
+    expect(defs).toHaveLength(34)
+    expect(fields(defs)).toEqual(LOADED_COLUMNS.map((c) => c.field))
+    expect(fields(defs)).not.toContain('input_tx')
   })
 
   it("'transfers' returns the 9 curated transfer columns, in the spec'd order", () => {
@@ -83,9 +84,9 @@ describe('getColumnsForTab', () => {
   it("'all' tab: every column whose dictionary kind is 'bignum' carries sortingFn 'bignum', and no other column does", () => {
     const defs = getColumnsForTab('all')
     const byField = (field: keyof EthRecord) => defs.find((d) => 'accessorKey' in d && d.accessorKey === field)
-    const expectedBignumFields = new Set(COLUMNS.filter((c) => c.kind === 'bignum').map((c) => c.field))
+    const expectedBignumFields = new Set(LOADED_COLUMNS.filter((c) => c.kind === 'bignum').map((c) => c.field))
 
-    for (const meta of COLUMNS) {
+    for (const meta of LOADED_COLUMNS) {
       const def = byField(meta.field)
       if (expectedBignumFields.has(meta.field)) {
         expect(def?.sortingFn, `${String(meta.field)} (kind: bignum) should sort via 'bignum'`).toBe('bignum')

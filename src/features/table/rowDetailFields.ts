@@ -1,3 +1,4 @@
+import type { DictionaryField } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 
 /**
@@ -13,7 +14,7 @@ import type { EthRecord } from '../../data/types'
 
 export interface FieldGroup {
   title: string
-  fields: (keyof EthRecord)[]
+  fields: DictionaryField[]
 }
 
 // All 35 dictionary fields, partitioned into the brief's three groups. Order within each

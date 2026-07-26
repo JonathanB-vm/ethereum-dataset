@@ -33,6 +33,11 @@ describe('parseCsv', () => {
     expect(r.event_signature).toBe('Transfer(address,address,uint256)')
     expect(r.quantity).toBe('146000000')
     expect(r.removed).toBe(false)
+    // Value assertions for the interned fields that aren't otherwise checked anywhere —
+    // guards against a wrong-source-field wiring bug (e.g. event_hash reading event_signature).
+    expect(r.block_hash).toBe('0xc779')
+    expect(r.block_timestamp).toBe('2026-07-14 23:55:11+00:00')
+    expect(r.event_hash).toBe('0xddf2')
   })
 
   it('skips blank lines between records', () => {

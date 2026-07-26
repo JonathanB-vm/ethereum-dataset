@@ -2,6 +2,7 @@ import { CopyButton } from '../../components/CopyButton'
 import { getColumnMeta } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 import { formatTimestamp, truncateMiddle, weiToEth, weiToGwei } from '../../data/transform'
+import { CalldataField } from './CalldataField'
 import { GROUPS, HUMAN_UNIT } from './rowDetailFields'
 
 interface RowDetailProps {
@@ -37,8 +38,8 @@ function rawString(value: unknown): string | null {
  * `./rowDetailFields`). Each loaded field shows its full raw value (mono, wrap-anywhere,
  * copyable) and, where the field's kind allows, a human-readable rendering beside it (ETH/
  * Gwei/formatted timestamp). The one on-demand field (`input_tx`) isn't held in memory —
- * see `getColumnMeta`'s `availability` — so it renders a "Not loaded" placeholder here
- * instead (Task 8 replaces this with a real per-row fetch).
+ * see `getColumnMeta`'s `availability` — so it renders via `CalldataField`, which fetches
+ * the value per row the moment it's expanded, instead of reading off `record`.
  */
 export function RowDetail({ record }: RowDetailProps) {
   return (
@@ -51,12 +52,11 @@ export function RowDetail({ record }: RowDetailProps) {
               const meta = getColumnMeta(field)
               if (meta?.availability === 'on-demand') {
                 return (
-                  <div key={String(field)} className="row-detail__field">
-                    <span className="row-detail__field-label">{meta.label}</span>
-                    <span className="row-detail__field-value row-detail__field-value--empty">
-                      Not loaded
-                    </span>
-                  </div>
+                  <CalldataField
+                    key={String(field)}
+                    txHash={record.transaction_hash}
+                    label={meta.label}
+                  />
                 )
               }
               const raw = rawString(record[field as keyof EthRecord])

@@ -986,3 +986,26 @@ tr:hover .copy-btn,
 .row-fullscreen__body .row-detail {
   padding: 0;
 }
+
+/* ---------- on-demand calldata field (CalldataField.tsx, Task 8) ---------- */
+
+.row-detail__field-error {
+  color: var(--negative, #d9534f);
+  font-size: 12px;
+}
+
+.row-detail__field-retry {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.row-detail__field-retry:hover {
+  color: var(--text);
+}

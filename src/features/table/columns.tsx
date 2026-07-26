@@ -122,6 +122,11 @@ const transferColumns: ColumnDef<EthRecord>[] = [
     header: header('transfers', 'block_timestamp'),
     cell: (info) => <TimeCell value={info.getValue()} />,
   }),
+  helper.accessor('block_number', {
+    header: header('transfers', 'block_number'),
+    cell: (info) => <NumberCell value={info.getValue()} />,
+    filterFn: filterFor('block_number'),
+  }),
   helper.accessor('transaction_hash', {
     header: header('transfers', 'transaction_hash'),
     cell: (info) => <TxHashCell value={info.getValue()} />,
@@ -172,6 +177,11 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
   helper.accessor('block_timestamp', {
     header: header('transactions', 'block_timestamp'),
     cell: (info) => <TimeCell value={info.getValue()} />,
+  }),
+  helper.accessor('block_number', {
+    header: header('transactions', 'block_number'),
+    cell: (info) => <NumberCell value={info.getValue()} />,
+    filterFn: filterFor('block_number'),
   }),
   helper.accessor('transaction_index', {
     header: header('transactions', 'transaction_index'),

@@ -26,11 +26,12 @@ describe('getColumnsForTab', () => {
     expect(fields(defs)).not.toContain('input_tx')
   })
 
-  it("'transfers' returns the 9 curated transfer columns, in the spec'd order", () => {
+  it("'transfers' returns the 10 curated transfer columns, in the spec'd order", () => {
     const defs = getColumnsForTab('transfers')
-    expect(defs).toHaveLength(9)
+    expect(defs).toHaveLength(10)
     expect(fields(defs)).toEqual([
       'block_timestamp',
+      'block_number',
       'transaction_hash',
       'event_type',
       'address',
@@ -42,11 +43,12 @@ describe('getColumnsForTab', () => {
     ])
   })
 
-  it("'transactions' returns the 10 curated transaction columns, in the spec'd order", () => {
+  it("'transactions' returns the 11 curated transaction columns, in the spec'd order", () => {
     const defs = getColumnsForTab('transactions')
-    expect(defs).toHaveLength(10)
+    expect(defs).toHaveLength(11)
     expect(fields(defs)).toEqual([
       'block_timestamp',
+      'block_number',
       'transaction_index',
       'transaction_hash',
       'from_address_tx',
@@ -93,6 +95,16 @@ describe('getColumnsForTab', () => {
       } else {
         expect(def?.sortingFn, `${String(meta.field)} (kind: ${meta.kind}) should not sort via 'bignum'`).toBeUndefined()
       }
+    }
+  })
+
+  it('block_number is range-filterable on both curated tabs and on all', () => {
+    for (const tab of ['transfers', 'transactions', 'all'] as const) {
+      const def = getColumnsForTab(tab).find(
+        (d) => 'accessorKey' in d && d.accessorKey === 'block_number',
+      )
+      expect(def, `block_number missing from the ${tab} tab`).toBeDefined()
+      expect(def?.filterFn).toBe('range')
     }
   })
 })

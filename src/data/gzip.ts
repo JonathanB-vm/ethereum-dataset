@@ -21,10 +21,11 @@ export async function decodeMaybeGzipped(bytes: Uint8Array): Promise<string> {
         'Requires Chrome 80+, Firefox 113+, or Safari 16.4+.',
     )
   }
-  // Use Response.body instead of Blob.stream() for direct streaming of bytes. Response.body
-  // is more widely supported across browsers and efficiently handles ByteSource input (Uint8Array,
-  // ArrayBuffer, etc) as a ReadableStream in all browsers that support DecompressionStream
-  // (Chrome 80+, Firefox 113+, Safari 16.4+).
+  // Both Blob.stream() and Response.body produce ReadableStream and are available in all browsers
+  // that support DecompressionStream (Chrome 80+, Firefox 113+, Safari 16.4+). However, jsdom's
+  // Blob lacks the .stream() method and binary-handling capabilities, making this code untestable
+  // under jsdom with Blob.stream(). Response.body is equally valid for this task and is testable,
+  // so it is used here to keep both production correctness and test coverage working.
   const stream = new Response(bytes as BodyInit).body!.pipeThrough(new DecompressionStream('gzip'))
   return new Response(stream).text()
 }

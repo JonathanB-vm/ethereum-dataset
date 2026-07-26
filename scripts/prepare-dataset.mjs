@@ -47,11 +47,18 @@ async function main() {
   // never emit — hanging forever — while this rejection would otherwise surface as an
   // unhandled rejection only later, if at all. `parserRef`/`rejectParse` are wired up just
   // below, before any parsing happens, so they are always set by the time a write can fail.
+  //
+  // Order matters here: Papaparse's `parser.abort()` synchronously calls the `complete`
+  // callback (bound to `resolve` below), so calling `abort()` first would resolve the
+  // wrapping promise and turn the following `rejectParse(err)` into a no-op (a promise only
+  // settles once). Rejecting first makes the rejection the promise's final state; `abort()`
+  // afterwards still stops the parser, but its `complete()` call lands on an
+  // already-settled promise and is silently ignored, exactly as intended.
   let parserRef = null
   let rejectParse = null
   rowsDone.catch((err) => {
-    if (parserRef) parserRef.abort()
     if (rejectParse) rejectParse(err)
+    if (parserRef) parserRef.abort()
   })
 
   gzip.write(`${LOADED_FIELDS.join(',')}\r\n`)

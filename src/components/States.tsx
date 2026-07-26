@@ -30,6 +30,10 @@ interface LoadingStateProps {
 }
 
 export function LoadingState({ loaded, total }: LoadingStateProps = {}) {
+  // Clamped to 100: on a host that serves the artifact with `Content-Encoding: gzip`,
+  // `Content-Length` is the compressed size while the stream yields decompressed bytes (see
+  // gzip.ts), so `loaded` can overshoot `total` — without the clamp the bar would report
+  // e.g. 130% instead of parking at 100% for the tail of the download.
   const pct = loaded != null && total != null && total > 0 ? Math.min(100, (loaded / total) * 100) : null
   const label =
     loaded == null
@@ -54,7 +58,13 @@ export function LoadingState({ loaded, total }: LoadingStateProps = {}) {
               style={pct != null ? { width: `${pct}%` } : undefined}
             />
           </div>
-          <span className="loading-state__progress-label">{label}</span>
+          {/* The wrapper's aria-label and the progressbar's aria-valuenow already carry this
+              text to assistive tech (attribute changes are not announced); this visible copy
+              is aria-hidden so a live region doesn't queue a polite announcement on every
+              onProgress tick — hundreds over a 12 MB download otherwise. */}
+          <span className="loading-state__progress-label" aria-hidden="true">
+            {label}
+          </span>
         </div>
       )}
       <section className="loading-state__stats" aria-hidden="true">

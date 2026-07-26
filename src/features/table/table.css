@@ -529,9 +529,9 @@
   vertical-align: middle;
 }
 
-/* All Records tab only (`data-table--dense`, DataTable.tsx) — 35 raw columns packed
+/* All Records tab only (`data-table--dense`, DataTable.tsx) — 34 raw columns packed
    edge-to-edge is the one view dense enough that a faint column rule actually helps reading
-   across a row; the two curated tabs (9–10 columns each) read fine without it, so this
+   across a row; the two curated tabs (10 and 11 columns) read fine without it, so this
    stays off there rather than adding a rule everywhere "for consistency". Faint (--border,
    not --border-strong) since these are just reading guides, not the header's own
    button-group separators. */
@@ -743,7 +743,7 @@ tr:hover .copy-btn,
 /* ---------- row expansion (chevron + RowDetail) ---------- */
 /* The chevron is rendered directly by DataTable.tsx (not a TanStack ColumnDef) so it never
    shows up in `table.getVisibleLeafColumns()` — keeping ExportButton's CSV column list and
-   FilterChips exactly the 35 dictionary fields, untouched by this task. */
+   FilterChips exactly the 34 loaded dictionary fields, untouched by this task. */
 
 /* Wide enough for the chevron + fullscreen-preview button pair (.row-actions). */
 .row-expander-header {

@@ -58,7 +58,7 @@ describe('CalldataField', () => {
     // this test where both mocks resolve immediately (e.g. `async () => value`) settles the
     // *older* promise first regardless of the guard (it was created first, with nothing
     // else awaited in between), so "last write wins" lands on the newer value even with
-    // `cancelled` deleted entirely. See task-8-report.md for the empirical repro.
+    // `cancelled` deleted entirely, and the test would pass either way.
     let resolveOld!: (value: string) => void
     let resolveNew!: (value: string) => void
     const oldPromise = new Promise<string>((resolve) => { resolveOld = resolve })

@@ -84,8 +84,8 @@ The script streams the source row by row — it is never held in memory — and:
   (`calldata/<xx>.json.gz`, 256 shards) so the browser can derive a shard's filename from
   a hash it already has, with no index file to fetch first;
 - writes `dataset.json`, a manifest of row/column counts, the block range, and the time
-  span, which the app reads to render the header badge and stats tiles without scanning
-  every row.
+  span — emitted for provenance and external tooling. The app does not read this file; it
+  derives the same figures from the loaded rows at runtime (see `computeStats` below).
 
 Fetching calldata relies on `DecompressionStream`, which requires Chrome 80+, Firefox
 113+, or Safari 16.4+.
@@ -122,7 +122,7 @@ hard-coded.
 
 ## Testing
 
-`npm test` runs 157 unit tests across 18 Vitest suites covering the dictionary, CSV
+`npm test` runs 160 unit tests across 18 Vitest suites covering the dictionary, CSV
 parsing and row validation, gzip decoding, the dataset-prep helpers, the calldata
 provider, BigInt transforms, dataset/column stats, filter functions, debounced search,
 pagination ranges, column definitions, and CSV export.

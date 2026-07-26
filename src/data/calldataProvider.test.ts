@@ -1,8 +1,28 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { calldataProvider, calldataShard } from './calldataProvider'
+import { CompressionStream } from 'node:stream/web'
+
+// jsdom (the test environment) doesn't implement CompressionStream — same polyfill
+// gzip.test.ts uses, needed here to build a real gzipped shard body.
+globalThis.CompressionStream ??= CompressionStream as unknown as typeof globalThis.CompressionStream
 
 function jsonResponse(body: unknown): Response {
   return new Response(new TextEncoder().encode(JSON.stringify(body)), { status: 200 })
+}
+
+/** Gzip a string using the same web streams API the app decompresses with. */
+async function gzip(text: string): Promise<Uint8Array> {
+  const cs = new CompressionStream('gzip')
+  const writer = cs.writable.getWriter()
+  void writer.write(new TextEncoder().encode(text))
+  void writer.close()
+  const buf = await new Response(cs.readable as unknown as BodyInit).arrayBuffer()
+  return new Uint8Array(buf)
+}
+
+async function gzippedJsonResponse(body: unknown): Promise<Response> {
+  const bytes = await gzip(JSON.stringify(body))
+  return new Response(bytes as BodyInit, { status: 200 })
 }
 
 afterEach(() => {
@@ -41,6 +61,19 @@ describe('calldataProvider', () => {
     const provider = calldataProvider('/data/calldata')
     await expect(provider.get('0xab11')).resolves.toBe('0xa9059cbb')
     expect(fetchMock).toHaveBeenCalledWith('/data/calldata/ab.json.gz')
+  })
+
+  it('fetches a real gzipped shard and decodes it through the actual DecompressionStream path', async () => {
+    // Every other test in this suite mocks a plain-JSON shard body — production always
+    // serves gzipped shards (calldata/<xx>.json.gz), so without this test the happy path
+    // never runs against real gzip bytes / decodeMaybeGzipped's DecompressionStream branch.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => gzippedJsonResponse({ '0xab11': '0xa9059cbb' })),
+    )
+
+    const provider = calldataProvider('/data/calldata')
+    await expect(provider.get('0xab11')).resolves.toBe('0xa9059cbb')
   })
 
   it("returns '0x' for a transaction absent from its shard", async () => {

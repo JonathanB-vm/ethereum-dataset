@@ -6,6 +6,7 @@ import {
   hasCalldata,
   projectRow,
 } from './datasetPrep.mjs'
+import { LOADED_COLUMNS } from '../src/data/dictionary.ts'
 
 describe('LOADED_FIELDS', () => {
   it('is the 34 shipped columns and excludes input_tx', () => {
@@ -14,12 +15,27 @@ describe('LOADED_FIELDS', () => {
     expect(LOADED_FIELDS[0]).toBe('block_hash')
     expect(LOADED_FIELDS[33]).toBe('is_token_transfer')
   })
+
+  // The prep script (this file) and the app's dictionary (src/data/dictionary.ts) each
+  // hard-code their own 34-column list, and `parseCsv` reads CSV columns by *name*
+  // (`header: true`) — so if one side renames a field and the other doesn't, that column
+  // silently parses as all-null across all 74,889 rows with no error and no malformed-row
+  // count to flag it. This test is the only thing that would catch that drift.
+  it('matches src/data/dictionary.ts LOADED_COLUMNS exactly, same names and same order', () => {
+    expect(LOADED_FIELDS).toEqual(LOADED_COLUMNS.map((c) => c.field))
+  })
 })
 
 describe('shardKey', () => {
   it('is the first hex byte after the 0x prefix, lowercased', () => {
     expect(shardKey('0xAB12cd34')).toBe('ab')
     expect(shardKey('0x0058db6926d4d88a')).toBe('00')
+  })
+
+  // Pinned to agree with calldataShard's own test in src/data/calldataProvider.test.ts —
+  // the two implementations are the contract, so every case pinned there is pinned here too.
+  it('tolerates an uppercase 0X prefix', () => {
+    expect(shardKey('0XAB12cd')).toBe('ab')
   })
 
   it('tolerates a missing 0x prefix', () => {

@@ -52,6 +52,10 @@ export const LOADED_FIELDS = [
  * `0xAB12…` lives in `calldata/ab.json.gz`. Tx hashes are effectively uniform, so 256
  * shards split the 12,220 stored transactions evenly with no index file needed: the
  * client derives the shard name from the hash it already has.
+ *
+ * Must stay identical to `calldataShard` in `src/data/calldataProvider.ts` — that file runs
+ * in the browser and this one under bare `node`, so the logic is deliberately duplicated
+ * rather than shared; keep both in sync when changing either.
  */
 export function shardKey(txHash) {
   const s = String(txHash ?? '')

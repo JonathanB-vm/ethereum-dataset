@@ -125,7 +125,15 @@ export function csvProvider(
   }
 }
 
-/** Drains a response body, reporting bytes as they arrive so the UI can show real progress. */
+/** Reports progress at most this often, so a chunky download doesn't turn into one React
+ *  render (and, in States.tsx, one live-region update) per network chunk. */
+const PROGRESS_MIN_INTERVAL_MS = 100
+const PROGRESS_MIN_STEP_FRACTION = 0.01
+
+/** Drains a response body, reporting bytes as they arrive so the UI can show real progress.
+ *  Throttled to roughly every 1% of `total` (or every ~100ms when `total` is unknown), but
+ *  the true final value is always reported — even if it doesn't clear the throttle — so the
+ *  progress bar reliably reaches 100% instead of freezing a few points short. */
 async function readWithProgress(
   body: ReadableStream<Uint8Array>,
   total: number | null,
@@ -134,13 +142,25 @@ async function readWithProgress(
   const reader = body.getReader()
   const chunks: Uint8Array[] = []
   let loaded = 0
+  const minStepBytes = total != null && total > 0 ? total * PROGRESS_MIN_STEP_FRACTION : Infinity
+  let lastReportedLoaded = 0
+  let lastReportedAt = 0
   for (;;) {
     const { done, value } = await reader.read()
     if (done) break
     chunks.push(value)
     loaded += value.byteLength
-    onProgress?.(loaded, total)
+    const now = Date.now()
+    if (loaded - lastReportedLoaded >= minStepBytes || now - lastReportedAt >= PROGRESS_MIN_INTERVAL_MS) {
+      onProgress?.(loaded, total)
+      lastReportedLoaded = loaded
+      lastReportedAt = now
+    }
   }
+  // Guarantee the last tick lands even if it never cleared the throttle above — otherwise a
+  // download whose final bytes arrive just after the previous report would leave the bar
+  // stuck below 100%.
+  if (loaded !== lastReportedLoaded) onProgress?.(loaded, total)
   const out = new Uint8Array(loaded)
   let offset = 0
   for (const chunk of chunks) {

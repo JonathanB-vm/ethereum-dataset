@@ -21,7 +21,10 @@ export async function decodeMaybeGzipped(bytes: Uint8Array): Promise<string> {
         'Requires Chrome 80+, Firefox 113+, or Safari 16.4+.',
     )
   }
-  const response = new Response(bytes as any)
-  const stream = response.body!.pipeThrough(new DecompressionStream('gzip') as any)
+  // Use Response.body instead of Blob.stream() for direct streaming of bytes. Response.body
+  // is more widely supported across browsers and efficiently handles ByteSource input (Uint8Array,
+  // ArrayBuffer, etc) as a ReadableStream in all browsers that support DecompressionStream
+  // (Chrome 80+, Firefox 113+, Safari 16.4+).
+  const stream = new Response(bytes as BodyInit).body!.pipeThrough(new DecompressionStream('gzip'))
   return new Response(stream).text()
 }

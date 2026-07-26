@@ -24,11 +24,13 @@ const ROWS_PER_BATCH = 1000
 function parseArgs(argv) {
   const source = argv[2]
   const outFlag = argv.indexOf('--out')
-  const out = outFlag !== -1 ? argv[outFlag + 1] : path.join(process.cwd(), 'public', 'data')
-  if (!source || source.startsWith('--')) {
+  const outValue = outFlag !== -1 ? argv[outFlag + 1] : undefined
+  const missingOutValue = outFlag !== -1 && outValue === undefined
+  if (!source || source.startsWith('--') || missingOutValue) {
     console.error('usage: node scripts/prepare-dataset.mjs <source.csv> [--out <dir>]')
     process.exit(1)
   }
+  const out = outFlag !== -1 ? outValue : path.join(process.cwd(), 'public', 'data')
   return { source, out }
 }
 
@@ -39,6 +41,19 @@ async function main() {
 
   const gzip = zlib.createGzip({ level: 6 })
   const rowsDone = pipeline(gzip, fs.createWriteStream(path.join(out, 'rows.csv.gz')))
+
+  // A write failure (e.g. disk full) must abort the parse loop immediately. Left alone, a
+  // parser paused on backpressure would wait on a 'drain' that a destroyed gzip stream will
+  // never emit — hanging forever — while this rejection would otherwise surface as an
+  // unhandled rejection only later, if at all. `parserRef`/`rejectParse` are wired up just
+  // below, before any parsing happens, so they are always set by the time a write can fail.
+  let parserRef = null
+  let rejectParse = null
+  rowsDone.catch((err) => {
+    if (parserRef) parserRef.abort()
+    if (rejectParse) rejectParse(err)
+  })
+
   gzip.write(`${LOADED_FIELDS.join(',')}\r\n`)
 
   /** shard stem -> { [txHash]: calldata } */
@@ -61,10 +76,12 @@ async function main() {
   }
 
   await new Promise((resolve, reject) => {
+    rejectParse = reject
     Papa.parse(fs.createReadStream(source, { encoding: 'utf8' }), {
       header: true,
       skipEmptyLines: 'greedy',
       step: (result, parser) => {
+        parserRef = parser
         const row = result.data
         const blockNumber = Number.parseInt(row.block_number, 10)
         const txHash = String(row.transaction_hash ?? '').trim()
@@ -139,8 +156,9 @@ async function main() {
   }
   await fsp.writeFile(path.join(out, 'dataset.json'), `${JSON.stringify(manifest, null, 2)}\n`)
 
+  const blockRange = rows > 0 ? `${manifest.blockMin}–${manifest.blockMax}` : 'n/a (no rows)'
   console.log(`\nrows            ${rows.toLocaleString('en-US')} (${skipped} skipped)`)
-  console.log(`blocks          ${manifest.blockMin}–${manifest.blockMax}`)
+  console.log(`blocks          ${blockRange}`)
   console.log(`calldata        ${calldataTransactions.toLocaleString('en-US')} tx across ${calldata.size} shards`)
   console.log(`written to      ${out}`)
 }

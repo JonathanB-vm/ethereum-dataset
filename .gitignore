@@ -7,3 +7,8 @@ coverage/
 .DS_Store
 Thumbs.db
 .superpowers/
+
+# Raw BigQuery exports live in the repo root as inputs to `npm run data:prep`.
+# They are never committed — analytics_25534200_25534299.csv alone is 2.19 GB.
+# The browser-facing artifacts it produces (public/data/) are committed instead.
+/analytics_*.csv

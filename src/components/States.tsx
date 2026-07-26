@@ -22,9 +22,41 @@ function skeletonWidth(seed: number, min: number, max: number): number {
  * Deliberately not spinner-only — a bare spinner tells the user *that* something is
  * loading but not *what's about to appear*; this shape previews it.
  */
-export function LoadingState() {
+interface LoadingStateProps {
+  /** Bytes downloaded so far, when the provider is reporting progress. */
+  loaded?: number
+  /** Total bytes, or null when the response had no Content-Length. */
+  total?: number | null
+}
+
+export function LoadingState({ loaded, total }: LoadingStateProps = {}) {
+  const pct = loaded != null && total != null && total > 0 ? Math.min(100, (loaded / total) * 100) : null
+  const label =
+    loaded == null
+      ? 'Loading dataset'
+      : pct != null
+        ? `Downloading dataset — ${Math.round(pct)}%`
+        : `Downloading dataset — ${(loaded / 1_000_000).toFixed(1)} MB`
+
   return (
-    <div className="loading-state" role="status" aria-live="polite" aria-label="Loading dataset">
+    <div className="loading-state" role="status" aria-live="polite" aria-label={label}>
+      {loaded != null && (
+        <div className="loading-state__progress">
+          <div
+            className="loading-state__progress-bar"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={pct != null ? Math.round(pct) : undefined}
+          >
+            <span
+              className="loading-state__progress-fill"
+              style={pct != null ? { width: `${pct}%` } : undefined}
+            />
+          </div>
+          <span className="loading-state__progress-label">{label}</span>
+        </div>
+      )}
       <section className="loading-state__stats" aria-hidden="true">
         {Array.from({ length: STAT_TILE_COUNT }).map((_, i) => (
           <div className="loading-state__tile" key={i}>

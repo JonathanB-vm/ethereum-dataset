@@ -15,6 +15,7 @@ import { ExportButton } from './features/export/ExportButton'
 import { GlobalSearchInput } from './components/GlobalSearchInput'
 import { DictionaryButton, DictionaryPanelProvider } from './features/dictionary/DictionaryPanel'
 import { exitDuration } from './theme/motion'
+import { useDebouncedValue } from './hooks/useDebouncedValue'
 
 interface LoadState {
   status: 'loading' | 'error' | 'ready'
@@ -22,20 +23,15 @@ interface LoadState {
   error?: string
 }
 
-/** Highest block_number in the dataset — the export may not be block-sorted. */
-function latestBlock(records: EthRecord[]): EthRecord | null {
-  let latest: EthRecord | null = null
-  for (const r of records) {
-    if (latest == null || r.block_number > latest.block_number) latest = r
-  }
-  return latest
-}
-
 function App() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
   // Bumping this re-runs the load effect below — Retry's whole job. Kept separate from
   // `state` itself so a retry doesn't need to duplicate the effect's fetch/catch logic.
   const [retryToken, setRetryToken] = useState(0)
+  // Download progress for the current load attempt — reset to null at the start of each
+  // attempt (including a retry) in the effect below, since a superseded load's progress
+  // shouldn't linger onscreen once a new one starts.
+  const [progress, setProgress] = useState<{ loaded: number; total: number | null } | null>(null)
   // Reset per load (see the effect below) so a *new* load that's still malformed re-shows
   // the notice even if the user dismissed it for a previous load.
   const [malformedNoticeDismissed, setMalformedNoticeDismissed] = useState(false)
@@ -57,6 +53,9 @@ function App() {
   // has to live here rather than inside DataTable — DataTable receives it back down as a
   // controlled prop.
   const [globalFilter, setGlobalFilter] = useState('')
+  // The input stays on `globalFilter` (instant feedback while typing); the *table* consumes
+  // `debouncedFilter`, so a burst of keystrokes costs one filter pass, not one per character.
+  const debouncedFilter = useDebouncedValue(globalFilter, 200)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Task 13: table fullscreen mode. State lives here (not in DataTable/FullscreenToggle)
@@ -135,7 +134,10 @@ function App() {
     // screen while the new fetch is in flight.
     setState({ status: 'loading' })
     setMalformedNoticeDismissed(false)
-    csvProvider()
+    setProgress(null)
+    csvProvider('/data/rows.csv.gz', (loaded, total) => {
+      if (!cancelled) setProgress({ loaded, total })
+    })
       .load()
       .then((result) => {
         if (!cancelled) setState({ status: 'ready', result })
@@ -163,11 +165,6 @@ function App() {
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
-
-  const latest = useMemo(
-    () => (state.result ? latestBlock(state.result.records) : null),
-    [state.result],
-  )
 
   const stats = useMemo(
     () => (state.result ? computeStats(state.result.records) : null),
@@ -203,8 +200,14 @@ function App() {
     <DictionaryPanelProvider records={state.result?.records ?? []}>
       <div className="app-shell">
         <Header
-          blockNumber={latest?.block_number ?? null}
-          blockTime={latest ? formatTimestamp(latest.block_timestamp) : null}
+          blockCount={stats?.blockCount ?? 0}
+          blockMin={stats?.blockMin ?? null}
+          blockMax={stats?.blockMax ?? null}
+          timeRange={
+            stats?.timeStart != null && stats.timeEnd != null
+              ? `${formatTimestamp(stats.timeStart)} – ${formatTimestamp(stats.timeEnd)}`
+              : null
+          }
         >
           {state.status === 'ready' && (
             <>
@@ -224,7 +227,9 @@ function App() {
           )}
         {state.status === 'ready' && stats && <StatsBand stats={stats} />}
         <main className="app-main">
-          {state.status === 'loading' && <LoadingState />}
+          {state.status === 'loading' && (
+            <LoadingState loaded={progress?.loaded} total={progress?.total} />
+          )}
           {state.status === 'error' && <ErrorState message={state.error} onRetry={handleRetry} />}
           {state.status === 'ready' && state.result && (
             <div
@@ -234,8 +239,13 @@ function App() {
             >
               <div className="table-toolbar">
                 <Tabs active={activeTab} onChange={setActiveTab} counts={tabCounts} />
-                {table && latest && (
-                  <ExportButton table={table} tab={activeTab} blockNumber={latest.block_number} />
+                {table && (
+                  <ExportButton
+                    table={table}
+                    tab={activeTab}
+                    blockMin={stats?.blockMin ?? null}
+                    blockMax={stats?.blockMax ?? null}
+                  />
                 )}
                 {/* `!== 'off'` (not just 'on') so the collapse icon holds through the
                     closing phase instead of flicking back one animation early. */}
@@ -249,7 +259,7 @@ function App() {
                 records={tabRecords}
                 tab={activeTab}
                 onTableReady={handleTableReady}
-                globalFilter={globalFilter}
+                globalFilter={debouncedFilter}
                 onGlobalFilterChange={setGlobalFilter}
               />
             </div>

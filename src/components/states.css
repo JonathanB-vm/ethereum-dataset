@@ -126,6 +126,37 @@
   }
 }
 
+.loading-state__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.loading-state__progress-bar {
+  height: 4px;
+  border-radius: 2px;
+  /* No --surface-2 token exists in tokens.css; --bg-inset is the nearest equivalent — it's
+     already used elsewhere in this file (`.loading-state__toolbar`) as a recessed-surface
+     track color against `--bg-raised`/`--bg`. */
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+
+.loading-state__progress-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 120ms linear;
+}
+
+.loading-state__progress-label {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 /* ---------- error state ---------- */
 
 .error-state {

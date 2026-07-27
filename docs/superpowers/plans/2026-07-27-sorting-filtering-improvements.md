@@ -915,6 +915,7 @@ git commit -m "refactor: extract FilterPopover shell from FilterControls"
 ### Task 4: Wire the block/time control into both headers
 
 **Files:**
+- Create: `src/features/table/__fixtures__/tableHarness.tsx`
 - Create: `src/features/table/BlockTimeFilterControl.tsx`
 - Create: `src/features/table/DataTable.blockRange.test.tsx`
 - Modify: `src/features/table/columns.tsx:1-19` (imports), `:97-110` (`header`)
@@ -927,19 +928,25 @@ git commit -m "refactor: extract FilterPopover shell from FilterControls"
   - `BlockTimeFilterControl` from `./BlockTimeFilterControl`, props `{ table: Table<EthRecord>; label: string }`
   - A `TableMeta` declaration merge adding `blockAxis: BlockAxisEntry[]`
   - `DataTable` gains a required prop `blockAxis: BlockAxisEntry[]`
+  - `src/features/table/__fixtures__/tableHarness.tsx` exporting `BASE`, `mk`,
+    `TEST_RECORDS`, `TEST_AXIS`, `renderTransfersTable()` and `sortHeader(name)` —
+    **Tasks 6 and 7 import all of these; do not re-declare them there.**
 
-- [ ] **Step 1: Write the failing integration tests**
+- [ ] **Step 1: Create the shared test harness**
 
-Create `src/features/table/DataTable.blockRange.test.tsx`:
+Three test files across Tasks 4, 6 and 7 drive the real `DataTable` over the same records.
+The 34-field `EthRecord` literal lives here once, so a 35th dataset field is a one-file edit.
+
+Create `src/features/table/__fixtures__/tableHarness.tsx`:
 
 ```tsx
-import '@testing-library/jest-dom'
-import { describe, it, expect, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { DataTable } from './DataTable'
-import type { BlockAxisEntry, EthRecord } from '../../data/types'
+import { render, screen, within } from '@testing-library/react'
+import { vi } from 'vitest'
+import { DataTable } from '../DataTable'
+import type { BlockAxisEntry, EthRecord } from '../../../data/types'
 
-const BASE: EthRecord = {
+/** All 34 loaded fields, so a test can override just the ones it cares about via `mk`. */
+export const BASE: EthRecord = {
   block_hash: '0xb', block_number: 25534200, block_timestamp: '2026-07-14 23:35:11+00:00',
   transaction_hash: '0xt1', transaction_index: 0, event_index: 0, batch_index: null,
   address: '0xtoken', event_type: 'ERC-20', event_hash: null, event_signature: null,
@@ -950,31 +957,58 @@ const BASE: EthRecord = {
   chain_id_tx: null, access_list_tx: null, r_tx: null, s_tx: null, v_tx: null,
   y_parity_tx: null, is_token_transfer: true,
 }
-const mk = (p: Partial<EthRecord>): EthRecord => ({ ...BASE, ...p })
 
-const RECORDS: EthRecord[] = [
-  mk({ block_number: 25534200, block_timestamp: '2026-07-14 23:35:11+00:00', transaction_hash: '0xa' }),
-  mk({ block_number: 25534201, block_timestamp: '2026-07-14 23:35:23+00:00', transaction_hash: '0xb' }),
-  mk({ block_number: 25534202, block_timestamp: '2026-07-14 23:35:35+00:00', transaction_hash: '0xc' }),
+export const mk = (p: Partial<EthRecord>): EthRecord => ({ ...BASE, ...p })
+
+/** Three transfer rows across three consecutive blocks, with distinct quantities so a sort is observable. */
+export const TEST_RECORDS: EthRecord[] = [
+  mk({ block_number: 25534200, block_timestamp: '2026-07-14 23:35:11+00:00', transaction_hash: '0xa', quantity: '1' }),
+  mk({ block_number: 25534201, block_timestamp: '2026-07-14 23:35:23+00:00', transaction_hash: '0xb', quantity: '3' }),
+  mk({ block_number: 25534202, block_timestamp: '2026-07-14 23:35:35+00:00', transaction_hash: '0xc', quantity: '2' }),
 ]
 
-const AXIS: BlockAxisEntry[] = [
+export const TEST_AXIS: BlockAxisEntry[] = [
   { block: 25534200, time: '2026-07-14 23:35:11+00:00' },
   { block: 25534201, time: '2026-07-14 23:35:23+00:00' },
   { block: 25534202, time: '2026-07-14 23:35:35+00:00' },
 ]
 
-function renderTable() {
+export function renderTransfersTable() {
   render(
     <DataTable
-      records={RECORDS}
+      records={TEST_RECORDS}
       tab="transfers"
-      blockAxis={AXIS}
+      blockAxis={TEST_AXIS}
       globalFilter=""
       onGlobalFilterChange={vi.fn()}
     />,
   )
 }
+
+/**
+ * The sort *toggle* button in a header. Scoped to `<thead>` on purpose: a header cell holds
+ * three buttons (ⓘ, sort, funnel), and once Task 7 puts the direction into the sort button's
+ * accessible name it reads "Quantity, sorted descending" — which a page-wide query would
+ * find alongside the sort *chip* of the same column. Scoping is what keeps this unambiguous.
+ */
+export function sortHeader(name: string) {
+  const thead = document.querySelector('thead')
+  if (!thead) throw new Error('no thead rendered')
+  return within(thead).getByRole('button', { name: new RegExp(`^${name}(,|$)`) })
+}
+```
+
+- [ ] **Step 2: Write the failing integration tests**
+
+Create `src/features/table/DataTable.blockRange.test.tsx`:
+
+```tsx
+import '@testing-library/jest-dom'
+import { describe, it, expect } from 'vitest'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { renderTransfersTable } from './__fixtures__/tableHarness'
+
+const renderTable = renderTransfersTable
 
 describe('DataTable — block & time range', () => {
   it('gives the Time column a filter funnel, which it never had before', () => {
@@ -1010,13 +1044,13 @@ describe('DataTable — block & time range', () => {
 })
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [ ] **Step 3: Run the tests to verify they fail**
 
 Run: `npx vitest run src/features/table/DataTable.blockRange.test.tsx`
 Expected: FAIL — TypeScript rejects the unknown `blockAxis` prop, and "Filter Time" has no
 matching element.
 
-- [ ] **Step 3: Create the wired control**
+- [ ] **Step 4: Create the wired control**
 
 Create `src/features/table/BlockTimeFilterControl.tsx`:
 
@@ -1074,7 +1108,7 @@ export function BlockTimeFilterControl({ table, label }: BlockTimeFilterControlP
 }
 ```
 
-- [ ] **Step 4: Special-case the two columns in `header()`**
+- [ ] **Step 5: Special-case the two columns in `header()`**
 
 In `src/features/table/columns.tsx`, change the first import line — `HeaderContext` replaces
 `Column`, whose only use in this file was the header render function's parameter annotation
@@ -1129,7 +1163,7 @@ say so:
 // `block_number`'s range filter instead.
 ```
 
-- [ ] **Step 5: Thread the axis through `DataTable`**
+- [ ] **Step 6: Thread the axis through `DataTable`**
 
 In `src/features/table/DataTable.tsx`, add to the imports:
 
@@ -1159,7 +1193,7 @@ Add one option to the `useReactTable` call, after `globalFilterFn: tableGlobalFi
     meta: { blockAxis },
 ```
 
-- [ ] **Step 6: Pass it from `App`**
+- [ ] **Step 7: Pass it from `App`**
 
 In `src/App.tsx`, add the prop to the `<DataTable>` element (around line 258):
 
@@ -1177,22 +1211,22 @@ In `src/App.tsx`, add the prop to the `<DataTable>` element (around line 258):
 `stats` is computed from `state.result.records` — the full dataset — which is what the
 constraint requires.
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [ ] **Step 8: Run the tests to verify they pass**
 
 Run: `npx vitest run src/features/table/DataTable.blockRange.test.tsx`
 Expected: PASS — 3 tests.
 
-- [ ] **Step 8: Run the full suite and a type-check**
+- [ ] **Step 9: Run the full suite and a type-check**
 
 Run: `npm run test && npm run build`
 Expected: PASS, and a clean `tsc -b`. The build is what proves the `TableMeta` declaration
 merge actually typed `table.options.meta.blockAxis` rather than leaving it `any`.
 
-- [ ] **Step 9: Lint and commit**
+- [ ] **Step 10: Lint and commit**
 
 ```bash
 npm run lint
-git add src/features/table/BlockTimeFilterControl.tsx src/features/table/DataTable.blockRange.test.tsx src/features/table/columns.tsx src/features/table/DataTable.tsx src/App.tsx
+git add src/features/table/__fixtures__/tableHarness.tsx src/features/table/BlockTimeFilterControl.tsx src/features/table/DataTable.blockRange.test.tsx src/features/table/columns.tsx src/features/table/DataTable.tsx src/App.tsx
 git commit -m "feat: filter by block or time from either header"
 ```
 
@@ -1322,60 +1356,24 @@ git commit -m "feat: descending-first sort on magnitude columns"
 - Modify: `src/features/table/table.css` (append styles)
 
 **Interfaces:**
-- Consumes: `columnDisplayLabel` from `./columns`; `TabId` from `./Tabs`.
+- Consumes: `columnDisplayLabel` from `./columns`; `TabId` from `./Tabs`;
+  `renderTransfersTable` and `sortHeader` from `./__fixtures__/tableHarness` (Task 4).
 - Produces: `SortChips` from `./SortChips`, props `{ table: Table<EthRecord>; tab: TabId }`.
 
 - [ ] **Step 1: Write the failing tests**
 
 Create `src/features/table/SortChips.test.tsx`. It renders the real `DataTable` so the
-chips are driven by genuine TanStack sorting state rather than a stub.
+chips are driven by genuine TanStack sorting state rather than a stub. The records, the
+axis, `renderTransfersTable` and `sortHeader` all come from the shared harness Task 4
+created — **do not re-declare them here.**
 
 ```tsx
 import '@testing-library/jest-dom'
-import { describe, it, expect, vi } from 'vitest'
-import { fireEvent, render, screen, within } from '@testing-library/react'
-import { DataTable } from './DataTable'
-import type { EthRecord } from '../../data/types'
+import { describe, it, expect } from 'vitest'
+import { fireEvent, screen } from '@testing-library/react'
+import { renderTransfersTable, sortHeader } from './__fixtures__/tableHarness'
 
-const BASE: EthRecord = {
-  block_hash: '0xb', block_number: 25534200, block_timestamp: '2026-07-14 23:35:11+00:00',
-  transaction_hash: '0xt1', transaction_index: 0, event_index: 0, batch_index: null,
-  address: '0xtoken', event_type: 'ERC-20', event_hash: null, event_signature: null,
-  operator_address: null, from_address: '0xf', to_address: '0xt', token_id: null,
-  quantity: '1', removed: false, nonce_tx: null, from_address_tx: null, to_address_tx: null,
-  value_tx: null, value_lossless_tx: null, gas_tx: null, gas_price_tx: null,
-  max_fee_per_gas_tx: null, max_priority_fee_per_gas_tx: null, type_tx: null,
-  chain_id_tx: null, access_list_tx: null, r_tx: null, s_tx: null, v_tx: null,
-  y_parity_tx: null, is_token_transfer: true,
-}
-const mk = (p: Partial<EthRecord>): EthRecord => ({ ...BASE, ...p })
-
-function renderTable() {
-  render(
-    <DataTable
-      records={[mk({ transaction_hash: '0xa' }), mk({ transaction_hash: '0xb', block_number: 25534201 })]}
-      tab="transfers"
-      blockAxis={[
-        { block: 25534200, time: '2026-07-14 23:35:11+00:00' },
-        { block: 25534201, time: '2026-07-14 23:35:23+00:00' },
-      ]}
-      globalFilter=""
-      onGlobalFilterChange={vi.fn()}
-    />,
-  )
-}
-
-/**
- * The sort *toggle* button in a header. Scoped to `<thead>` on purpose: a header cell holds
- * three buttons (ⓘ, sort, funnel), and once Task 7 puts the direction into the sort button's
- * accessible name it reads "Quantity, sorted descending" — which a page-wide query would
- * find alongside the sort *chip* of the same column. Scoping is what keeps this unambiguous.
- */
-function sortHeader(name: string) {
-  const thead = document.querySelector('thead')
-  if (!thead) throw new Error('no thead rendered')
-  return within(thead).getByRole('button', { name: new RegExp(`^${name}(,|$)`) })
-}
+const renderTable = renderTransfersTable
 
 describe('SortChips', () => {
   it('shows nothing until something is sorted', () => {
@@ -1627,56 +1625,23 @@ git commit -m "feat: sort chips row with priority, reverse and remove"
 - Create: `src/features/table/SortableHeader.test.tsx`
 
 **Interfaces:**
-- Consumes: nothing from earlier tasks.
+- Consumes: `renderTransfersTable` and `sortHeader` from `./__fixtures__/tableHarness` (Task 4).
 - Produces: `SortableHeader` props widen to
   `{ label: string; column: Column<EthRecord, unknown>; sortCount: number }`.
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `src/features/table/SortableHeader.test.tsx`, reusing the `DataTable` harness so the
-badge is driven by real sorting state:
+Create `src/features/table/SortableHeader.test.tsx`, reusing the shared harness Task 4
+created so the badge is driven by real sorting state. **Do not re-declare the records, the
+axis, `renderTransfersTable` or `sortHeader` here — import them.**
 
 ```tsx
 import '@testing-library/jest-dom'
-import { describe, it, expect, vi } from 'vitest'
-import { fireEvent, render, screen, within } from '@testing-library/react'
-import { DataTable } from './DataTable'
-import type { EthRecord } from '../../data/types'
+import { describe, it, expect } from 'vitest'
+import { fireEvent, screen } from '@testing-library/react'
+import { renderTransfersTable, sortHeader } from './__fixtures__/tableHarness'
 
-const BASE: EthRecord = {
-  block_hash: '0xb', block_number: 25534200, block_timestamp: '2026-07-14 23:35:11+00:00',
-  transaction_hash: '0xt1', transaction_index: 0, event_index: 0, batch_index: null,
-  address: '0xtoken', event_type: 'ERC-20', event_hash: null, event_signature: null,
-  operator_address: null, from_address: '0xf', to_address: '0xt', token_id: null,
-  quantity: '1', removed: false, nonce_tx: null, from_address_tx: null, to_address_tx: null,
-  value_tx: null, value_lossless_tx: null, gas_tx: null, gas_price_tx: null,
-  max_fee_per_gas_tx: null, max_priority_fee_per_gas_tx: null, type_tx: null,
-  chain_id_tx: null, access_list_tx: null, r_tx: null, s_tx: null, v_tx: null,
-  y_parity_tx: null, is_token_transfer: true,
-}
-const mk = (p: Partial<EthRecord>): EthRecord => ({ ...BASE, ...p })
-
-function renderTable() {
-  render(
-    <DataTable
-      records={[mk({ transaction_hash: '0xa' }), mk({ transaction_hash: '0xb', block_number: 25534201 })]}
-      tab="transfers"
-      blockAxis={[
-        { block: 25534200, time: '2026-07-14 23:35:11+00:00' },
-        { block: 25534201, time: '2026-07-14 23:35:23+00:00' },
-      ]}
-      globalFilter=""
-      onGlobalFilterChange={vi.fn()}
-    />,
-  )
-}
-
-/** Scoped to `<thead>` — see the identical helper in SortChips.test.tsx for why. */
-function sortHeader(name: string) {
-  const thead = document.querySelector('thead')
-  if (!thead) throw new Error('no thead rendered')
-  return within(thead).getByRole('button', { name: new RegExp(`^${name}(,|$)`) })
-}
+const renderTable = renderTransfersTable
 
 describe('SortableHeader', () => {
   it('announces direction but no priority while a single column is sorted', () => {

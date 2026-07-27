@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "data:prep": "node scripts/prepare-dataset.mjs",
+    "data:tokens": "node scripts/prepare-tokens.mjs tokens.csv",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",

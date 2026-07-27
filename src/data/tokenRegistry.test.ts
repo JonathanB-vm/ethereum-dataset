@@ -95,4 +95,12 @@ describe('tokenRegistryProvider', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     await expect(tokenRegistryProvider().load()).resolves.toEqual(new Map())
   })
+
+  it('resolves to an empty registry when the response body is not valid JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.reject(new Error('bad json')) }),
+    )
+    await expect(tokenRegistryProvider().load()).resolves.toEqual(new Map())
+  })
 })

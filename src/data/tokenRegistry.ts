@@ -10,6 +10,8 @@ export interface TokenInfo {
 /** Token contract address (lowercased) → its metadata. */
 export type TokenRegistry = Map<string, TokenInfo>
 
+/** Singleton for initial state or defaults. `load()` deliberately returns fresh maps on failure
+ * so callers never receive this mutable shared instance. */
 export const EMPTY_TOKEN_REGISTRY: TokenRegistry = new Map()
 
 /**
@@ -58,10 +60,10 @@ export function tokenRegistryProvider(url = '/data/tokens.json') {
     async load(): Promise<TokenRegistry> {
       try {
         const res = await fetch(url)
-        if (!res.ok) return EMPTY_TOKEN_REGISTRY
+        if (!res.ok) return new Map()
         return parseTokenRegistry(await res.json())
       } catch {
-        return EMPTY_TOKEN_REGISTRY
+        return new Map()
       }
     },
   }

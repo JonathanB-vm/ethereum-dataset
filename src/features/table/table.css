@@ -1009,3 +1009,124 @@ tr:hover .copy-btn,
 .row-detail__field-retry:hover {
   color: var(--text);
 }
+
+/* ---------- block & time range control (BlockTimeRangeFilter) ---------- */
+
+.block-range {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 17rem;
+}
+
+.block-range__title {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+/* The two sliders are stacked so their thumbs share one track. The container reserves the
+   height; each input is transparent-tracked and absolutely positioned over the same line. */
+.block-range__sliders {
+  position: relative;
+  height: 1.5rem;
+}
+
+.block-range__slider {
+  position: absolute;
+  inset-inline: 0;
+  top: 0.35rem;
+  width: 100%;
+  margin: 0;
+  background: transparent;
+  /* Only the thumbs should be grabbable, or the upper input would swallow every click
+     meant for the lower one. Re-enabled on the thumb pseudo-elements below. */
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.block-range__slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.block-range__slider::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.block-range__slider::-webkit-slider-thumb {
+  pointer-events: auto;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-top: -0.35rem;
+  border-radius: 50%;
+  border: 2px solid var(--bg, #fff);
+  background: var(--accent, #4c8dff);
+  cursor: pointer;
+}
+
+.block-range__slider::-moz-range-thumb {
+  pointer-events: auto;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  border: 2px solid var(--bg, #fff);
+  background: var(--accent, #4c8dff);
+  cursor: pointer;
+}
+
+.block-range__slider:focus-visible {
+  outline: none;
+}
+
+.block-range__slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #4c8dff) 40%, transparent);
+}
+
+.block-range__slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #4c8dff) 40%, transparent);
+}
+
+.block-range__readout {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.block-range__endpoint {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.block-range__endpoint--right {
+  text-align: right;
+}
+
+.block-range__block {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.block-range__time {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.block-range__count {
+  margin: 0;
+  font-size: 0.7rem;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}

@@ -45,7 +45,10 @@ export function BlockTimeFilterControl({ table, label }: BlockTimeFilterControlP
   const isActive = !!(value && (value.min?.trim() || value.max?.trim()))
 
   return (
-    <FilterPopover label={label} isActive={isActive}>
+    // `align="start"` because Block and Time are the leftmost columns on every tab: the
+    // default right-anchored panel would grow off the table's left edge and be clipped.
+    // `wide` because this panel needs more room than the 220px the other filters use.
+    <FilterPopover label={label} isActive={isActive} align="start" wide>
       <BlockTimeRangeFilter
         axis={table.options.meta?.blockAxis ?? EMPTY_AXIS}
         value={value}

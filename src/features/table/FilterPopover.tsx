@@ -5,6 +5,15 @@ interface FilterPopoverProps {
   label: string
   /** Drives the accent state and the dot — computed by the caller, since what counts as "set" differs per panel. */
   isActive: boolean
+  /**
+   * Which edge of the funnel the panel is anchored to. `'end'` (the default) grows it
+   * leftward, which keeps it inside the table for every column but the leftmost — there,
+   * pass `'start'` so it grows into the table instead of off the edge, where
+   * `.table-scroll`'s `overflow: auto` would clip it.
+   */
+  align?: 'start' | 'end'
+  /** Widens the panel past the default 220px for content that needs the room. */
+  wide?: boolean
   children: ReactNode
 }
 
@@ -17,10 +26,17 @@ interface FilterPopoverProps {
  * implementation of this behavior instead of maintaining a second copy of the Escape and
  * outside-click handling.
  */
-export function FilterPopover({ label, isActive, children }: FilterPopoverProps) {
+export function FilterPopover({ label, isActive, align = 'end', wide = false, children }: FilterPopoverProps) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const popoverClass = [
+    'filter-popover',
+    align === 'start' ? 'filter-popover--align-start' : '',
+    wide ? 'filter-popover--wide' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   useEffect(() => {
     if (!open) return
@@ -69,7 +85,7 @@ export function FilterPopover({ label, isActive, children }: FilterPopoverProps)
       </button>
       {open && (
         <div
-          className="filter-popover"
+          className={popoverClass}
           role="dialog"
           aria-label={`Filter ${label}`}
           onClick={(e) => e.stopPropagation()}

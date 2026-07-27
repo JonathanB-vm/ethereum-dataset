@@ -11,6 +11,19 @@ describe('DataTable — block & time range', () => {
     expect(screen.getByRole('button', { name: 'Filter Time' })).toBeInTheDocument()
   })
 
+  it('opens both funnels left-anchored and wide, so the panel stays inside the table', () => {
+    // Block and Time are the leftmost columns, so the default right-anchored panel would
+    // grow off the table's left edge and be clipped by .table-scroll's `overflow: auto`.
+    renderTable()
+    for (const name of ['Filter Time', 'Filter Block']) {
+      fireEvent.click(screen.getByRole('button', { name }))
+      const panel = screen.getByRole('dialog')
+      expect(panel).toHaveClass('filter-popover--align-start')
+      expect(panel).toHaveClass('filter-popover--wide')
+      fireEvent.keyDown(document, { key: 'Escape' })
+    }
+  })
+
   it('opens the same "Block & time range" panel from either funnel', () => {
     renderTable()
     fireEvent.click(screen.getByRole('button', { name: 'Filter Time' }))

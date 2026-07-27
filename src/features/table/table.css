@@ -348,6 +348,23 @@
   cursor: default;
 }
 
+/* The default `right: -6px` above grows the panel leftward from the funnel, which keeps it
+   inside the table for every column except the leftmost ones. Block and Time are columns 1
+   and 2, so a left-growing panel there hangs off the table's left edge and is clipped by
+   `.table-scroll`'s `overflow: auto`. Anchoring to the funnel's left edge instead grows it
+   into the table, where there is always room. */
+.filter-popover--align-start {
+  right: auto;
+  left: -6px;
+}
+
+/* The block/time range control (two sliders, a two-column readout and two text boxes) does
+   not fit the default 220px. This is the single source of truth for that panel's width —
+   `.block-range` deliberately sets no width of its own. */
+.filter-popover--wide {
+  width: 300px;
+}
+
 .filter-popover__field {
   display: flex;
   flex-direction: column;
@@ -1029,11 +1046,14 @@ tr:hover .copy-btn,
 
 /* ---------- block & time range control (BlockTimeRangeFilter) ---------- */
 
+/* No `min-width` here on purpose. The popover owns the panel's width (see
+   `.filter-popover--wide`), so this fills whatever it is given. A `min-width` larger than
+   the popover's content box would push the panel straight through its own border and
+   shadow — with `box-sizing: border-box`, a 220px popover only has 194px of content box. */
 .block-range {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  min-width: 17rem;
 }
 
 .block-range__title {

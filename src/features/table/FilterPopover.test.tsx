@@ -34,6 +34,25 @@ describe('FilterPopover', () => {
     expect(screen.getByRole('button', { name: 'Filter Block' })).not.toHaveFocus()
   })
 
+  it('anchors to the funnel\'s right edge by default', () => {
+    render(<FilterPopover label="Block" isActive={false}><p>x</p></FilterPopover>)
+    fireEvent.click(screen.getByRole('button', { name: 'Filter Block' }))
+    const panel = screen.getByRole('dialog')
+    expect(panel).not.toHaveClass('filter-popover--align-start')
+    expect(panel).not.toHaveClass('filter-popover--wide')
+  })
+
+  it('anchors to the left edge and widens on request', () => {
+    // Both opt-ins exist for the block/time control, which sits in the leftmost columns and
+    // holds a panel too wide for the default 220px. Without them the panel grows off the
+    // table's left edge (clipped by .table-scroll) and overflows its own border.
+    render(<FilterPopover label="Block" isActive={false} align="start" wide><p>x</p></FilterPopover>)
+    fireEvent.click(screen.getByRole('button', { name: 'Filter Block' }))
+    const panel = screen.getByRole('dialog')
+    expect(panel).toHaveClass('filter-popover--align-start')
+    expect(panel).toHaveClass('filter-popover--wide')
+  })
+
   it('marks the trigger active when a filter is set', () => {
     const { rerender } = render(<FilterPopover label="Block" isActive={false}><p>x</p></FilterPopover>)
     expect(screen.getByRole('button', { name: 'Filter Block' })).not.toHaveClass(

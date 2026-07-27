@@ -1,4 +1,4 @@
-import type { EthRecord } from '../../data/types'
+import type { BlockAxisEntry, EthRecord } from '../../data/types'
 import { toBigInt, weiToEth, weiToGwei } from '../../data/transform'
 
 export interface DatasetStats {
@@ -13,6 +13,8 @@ export interface DatasetStats {
   /** Distinct blocks present — reported rather than `blockMax - blockMin + 1`, so a
    *  dataset with gaps is described honestly. */
   blockCount: number
+  /** Every distinct block with its timestamp, ascending. Drives the block/time range control. */
+  blockAxis: BlockAxisEntry[]
   blockMin: number | null
   blockMax: number | null
   timeStart: string | null
@@ -30,7 +32,9 @@ export function computeStats(records: EthRecord[]): DatasetStats {
   const eventTypeCountMap = new Map<string, number>()
   const txMap = new Map<string, TxAggregate>()
   const addresses = new Set<string>()
-  const blocks = new Set<number>()
+  // Map, not Set: `blocks.size` still gives blockCount, and the values give the block→time
+  // axis the range control needs — both out of the single pass this function already makes.
+  const blocks = new Map<number, string>()
   let blockMin: number | null = null
   let blockMax: number | null = null
   let timeStart: string | null = null
@@ -68,7 +72,12 @@ export function computeStats(records: EthRecord[]): DatasetStats {
     if (r.from_address_tx != null) addresses.add(r.from_address_tx)
     if (r.to_address_tx != null) addresses.add(r.to_address_tx)
 
-    blocks.add(r.block_number)
+    // Same coalesce rule as the tx aggregates above: a block first seen on a row with an
+    // empty timestamp gets backfilled by a later row that has one, rather than locking in ''.
+    const seenTime = blocks.get(r.block_number)
+    if (seenTime === undefined || (seenTime === '' && r.block_timestamp !== '')) {
+      blocks.set(r.block_number, r.block_timestamp)
+    }
     if (blockMin === null || r.block_number < blockMin) blockMin = r.block_number
     if (blockMax === null || r.block_number > blockMax) blockMax = r.block_number
     // ISO-8601 with a fixed +00:00 offset sorts correctly as a plain string, so no Date
@@ -96,6 +105,10 @@ export function computeStats(records: EthRecord[]): DatasetStats {
     (a, b) => b.count - a.count,
   )
 
+  const blockAxis: BlockAxisEntry[] = Array.from(blocks, ([block, time]) => ({ block, time })).sort(
+    (a, b) => a.block - b.block,
+  )
+
   return {
     totalRecords: records.length,
     txCount,
@@ -106,6 +119,7 @@ export function computeStats(records: EthRecord[]): DatasetStats {
     gasPriceMaxGwei: gasPriceMax === null ? null : weiToGwei(gasPriceMax.toString()),
     uniqueAddresses: addresses.size,
     blockCount: blocks.size,
+    blockAxis,
     blockMin,
     blockMax,
     timeStart,

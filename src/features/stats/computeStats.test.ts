@@ -75,6 +75,36 @@ describe('computeStats', () => {
     expect(s.gasPriceMinGwei).toBe('2')
     expect(s.gasPriceMaxGwei).toBe('2')
   })
+
+  it('builds an ascending block axis with one entry per distinct block', () => {
+    const s = computeStats([
+      mk({ block_number: 25534202, block_timestamp: '2026-07-14 23:35:35+00:00' }),
+      mk({ block_number: 25534200, block_timestamp: '2026-07-14 23:35:11+00:00' }),
+      mk({ block_number: 25534202, block_timestamp: '2026-07-14 23:35:35+00:00' }),
+    ])
+    expect(s.blockAxis).toEqual([
+      { block: 25534200, time: '2026-07-14 23:35:11+00:00' },
+      { block: 25534202, time: '2026-07-14 23:35:35+00:00' },
+    ])
+  })
+
+  it('keeps blockCount and blockAxis length in agreement', () => {
+    const s = computeStats([
+      mk({ block_number: 25534200 }),
+      mk({ block_number: 25534250 }),
+      mk({ block_number: 25534250 }),
+    ])
+    expect(s.blockCount).toBe(2)
+    expect(s.blockAxis).toHaveLength(s.blockCount)
+  })
+
+  it('backfills a block whose first-seen row had an empty timestamp', () => {
+    const s = computeStats([
+      mk({ block_number: 25534200, block_timestamp: '' }),
+      mk({ block_number: 25534200, block_timestamp: '2026-07-14 23:35:11+00:00' }),
+    ])
+    expect(s.blockAxis).toEqual([{ block: 25534200, time: '2026-07-14 23:35:11+00:00' }])
+  })
 })
 
 describe('block range across a multi-block dataset', () => {

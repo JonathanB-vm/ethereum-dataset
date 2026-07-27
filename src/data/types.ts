@@ -43,3 +43,15 @@ export type RowKind = 'transfer' | 'transaction'
 export function rowKind(r: EthRecord): RowKind {
   return r.is_token_transfer ? 'transfer' : 'transaction'
 }
+
+/**
+ * One block on the dataset's block axis, paired with the timestamp it was mined at.
+ * Blocks and timestamps are 1:1 in this export, which is why a single range control can
+ * express a bound in either unit — see the sorting/filtering design doc.
+ */
+export interface BlockAxisEntry {
+  /** e.g. 25534200 */
+  block: number
+  /** Raw `block_timestamp`, e.g. "2026-07-14 23:35:11+00:00". `''` if no row carried one. */
+  time: string
+}

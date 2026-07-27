@@ -13,6 +13,17 @@ The data comes from Google BigQuery's public
 - **`token_transfers`** — ERC-20 / ERC-721 transfer events
 - **`transactions`** — the enclosing mainnet transactions
 
+A third BigQuery export, `tokens.csv` (223,930 token contracts, gitignored), supplies each
+token contract's `decimals` — the scale factor every ERC-20 quantity is stored against,
+since Ethereum has no fractional integers. `npm run data:tokens` distills it to
+`public/data/tokens.json`, keeping only the contracts this dataset references.
+
+**Coverage is partial and the gap is not random.** Of the 955 token contracts in the
+dataset, 64 have usable decimals, covering 20,352 of 43,941 transfer rows (46.3%). USDC is
+absent from the token export and is alone 25% of all transfers. Rows whose decimals are
+unknown show a dash rather than a guessed divisor — a wrong scale is off by orders of
+magnitude, which is worse than no answer.
+
 The source export (`analytics_25534200_25534299.csv`, 2.19 GB, gitignored) covers 100
 blocks: 74,889 rows — 43,941 token-transfer rows and 30,948 transaction rows — across 35
 documented columns. 96.9% of the export's bytes are a single column, `input_tx` (contract
@@ -43,6 +54,10 @@ npm run preview   # serve the production build
 - **Three views** — curated *Token Transfers* and *Transactions* tabs (unit-converted
   columns: ETH, Gwei, plus a sortable, range-filterable **Block** column), plus an
   *All Records* tab showing all 34 loaded columns as raw stored values.
+  *Token Transfers* gains a **Normalized Quantity** column (`quantity ÷ 10^decimals`, shown
+  with the token symbol) beside the raw stored `Quantity` — an 80 USDT transfer reads as
+  `80 USDT` rather than `80,000,000`. It sorts correctly across tokens of different scales
+  and filters on bounds typed in token units.
 - **Table** — per-column sorting (BigInt-aware for numeric strings), per-column filters
   (text / range / multi-select) with removable filter chips, debounced global search
   (⌘K / Ctrl-K) that stays responsive at 74,889 rows, pagination, and per-row detail
@@ -51,7 +66,7 @@ npm run preview   # serve the production build
   (`input_tx`) lazily through `CalldataProvider`, showing `Loading…` then the value; a
   plain value-transfer transaction resolves to `0x` without a network round-trip, since
   only transactions with real calldata are shipped as artifacts.
-- **Data dictionary** — a slide-over panel describing all 35 documented fields (source
+- **Data dictionary** — a slide-over panel describing all 36 documented fields (source
   table, type, description) with live per-column stats: fill rate, distinct count,
   min/max. `input_tx` shows "Fetched on demand" instead of a fill-rate bar, since its
   value isn't held in memory. Every column header's ⓘ opens the same panel scoped to
@@ -70,6 +85,7 @@ where each artifact fits):
 
 ```bash
 npm run data:prep <source.csv>   # regenerates public/data/
+npm run data:tokens   # rebuild public/data/tokens.json from tokens.csv
 ```
 
 The script streams the source row by row — it is never held in memory — and:
@@ -104,7 +120,7 @@ src/data/calldataProvider.ts ← lazy per-row calldata
         │        implements
 src/data/provider.ts   (DataProvider)  ← the data-layer seam
         │
-src/data/transform.ts / dictionary.ts  ← BigInt conversions, 35-field column dictionary
+src/data/transform.ts / dictionary.ts  ← BigInt conversions, 36-field column dictionary
         │
 src/App.tsx                            ← load state, tabs, theme, panels
 ├── src/features/stats/                ← stats band (computeStats)

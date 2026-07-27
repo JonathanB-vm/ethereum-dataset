@@ -4,7 +4,7 @@ import { Header } from './components/Header'
 import { ErrorState, LoadingState, MalformedNotice } from './components/States'
 import { csvProvider } from './data/csvProvider'
 import type { LoadResult } from './data/provider'
-import { EMPTY_TOKEN_REGISTRY } from './data/tokenRegistry'
+import { EMPTY_TOKEN_REGISTRY, tokenRegistryProvider, type TokenRegistry } from './data/tokenRegistry'
 import type { BlockAxisEntry, EthRecord } from './data/types'
 import { formatTimestamp } from './data/transform'
 import { StatsBand } from './features/stats/StatsBand'
@@ -65,6 +65,7 @@ function App() {
   // `debouncedFilter`, so a burst of keystrokes costs one filter pass, not one per character.
   const debouncedFilter = useDebouncedValue(globalFilter, 200)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const [tokens, setTokens] = useState<TokenRegistry>(EMPTY_TOKEN_REGISTRY)
 
   // Task 13: table fullscreen mode. State lives here (not in DataTable/FullscreenToggle)
   // because it toggles a class on `.table-card`, which wraps both the toolbar (where the
@@ -159,6 +160,23 @@ function App() {
       cancelled = true
     }
   }, [retryToken])
+
+  // Loaded separately from the rows, and deliberately never awaited alongside them: the
+  // decimals lookup is an enhancement, not a dependency. `tokenRegistryProvider` already
+  // resolves to an empty registry on any failure, so a missing tokens.json costs the
+  // Normalized Quantity column its values and nothing else. Runs once — unlike the dataset
+  // effect it has no retry token, because there is no error state for the user to retry from.
+  useEffect(() => {
+    let cancelled = false
+    tokenRegistryProvider()
+      .load()
+      .then((registry) => {
+        if (!cancelled) setTokens(registry)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleRetry = useCallback(() => setRetryToken((t) => t + 1), [])
 
@@ -270,11 +288,7 @@ function App() {
                 onTableReady={handleTableReady}
                 globalFilter={debouncedFilter}
                 onGlobalFilterChange={setGlobalFilter}
-                // Task 7 replaces this with real state loaded from tokens.json; DataTable's
-                // `tokens` prop became required in this task, ahead of anything consuming
-                // it, so the empty registry keeps the app working (dash-only normalized
-                // cells) until that load lands.
-                tokens={EMPTY_TOKEN_REGISTRY}
+                tokens={tokens}
               />
             </div>
           )}

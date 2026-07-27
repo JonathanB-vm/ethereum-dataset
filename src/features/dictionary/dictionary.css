@@ -116,7 +116,16 @@
   overflow-wrap: anywhere;
 }
 
-.dictionary-panel__close {
+.dictionary-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+/* Shared by the header's close button and the download-PDF link, so the two read as one
+   control cluster. Applies to <a> as well as <button>, hence the explicit text-decoration. */
+.dictionary-panel__icon-btn {
   display: grid;
   place-items: center;
   flex: none;
@@ -124,6 +133,7 @@
   height: 28px;
   padding: 0;
   color: var(--text-muted);
+  text-decoration: none;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -131,7 +141,7 @@
   transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
 }
 
-.dictionary-panel__close:hover {
+.dictionary-panel__icon-btn:hover {
   color: var(--text);
   border-color: var(--border-strong);
   background: var(--bg-inset);

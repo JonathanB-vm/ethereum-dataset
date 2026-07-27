@@ -266,15 +266,20 @@ export function DictionaryPanel({ records, field, onClose, closing }: Dictionary
       >
         <div className="dictionary-panel__header">
           <h2 className="dictionary-panel__title">{title}</h2>
-          <button
-            ref={closeBtnRef}
-            type="button"
-            className="dictionary-panel__close"
-            aria-label="Close data dictionary"
-            onClick={onClose}
-          >
-            <CloseIcon />
-          </button>
+          <div className="dictionary-panel__actions">
+            {/* Full mode only: the PDF documents every column, so it belongs with the full
+             *  listing rather than the single-field view opened from one column's ⓘ. */}
+            {!field && <DownloadPdfLink />}
+            <button
+              ref={closeBtnRef}
+              type="button"
+              className="dictionary-panel__icon-btn"
+              aria-label="Close data dictionary"
+              onClick={onClose}
+            >
+              <CloseIcon />
+            </button>
+          </div>
         </div>
         <div className="dictionary-panel__body">
           {field && meta ? (
@@ -413,10 +418,48 @@ function FullDictionary({ records }: { records: EthRecord[] }) {
   )
 }
 
+/**
+ * Icon-only download of the dataset's field-reference PDF, which ships as a static asset in
+ * `public/` (root-absolute path, same convention as `/data/...`).
+ *
+ * An `<a download>` rather than a button + JS: the browser handles the save natively, and
+ * the panel's focus trap already selects `[href]`, so the link joins the tab cycle without
+ * any change there. `download` also pins the saved filename to the human-readable title
+ * regardless of what the asset is called on disk.
+ */
+function DownloadPdfLink() {
+  return (
+    <a
+      className="dictionary-panel__icon-btn"
+      href="/ethereum-dataset.pdf"
+      download="Ethereum Dataset.pdf"
+      aria-label="Download data dictionary (PDF)"
+      title="Download data dictionary (PDF)"
+    >
+      <DownloadIcon />
+    </a>
+  )
+}
+
 function CloseIcon() {
   return (
     <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
       <path d="M3.5 3.5l9 9m0-9l-9 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** Same glyph as ExportButton's — kept local, matching this file's other icon components. */
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
+      <path
+        d="M8 2v7.5m0 0L5 6.5m3 3l3-3M2.5 12v1.2a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V12"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }

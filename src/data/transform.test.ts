@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   weiToEth, weiToGwei, formatTimestamp, truncateHex, truncateMiddle,
   formatBigInt, compareNumericStrings, toBigInt, decimalToWei,
+  isValidDecimals, normalizeQuantity, formatNormalizedQuantity, compareNormalizedQuantity,
 } from './transform'
 
 describe('toBigInt', () => {
@@ -97,5 +98,99 @@ describe('compareNumericStrings', () => {
   it('sorts nulls last', () => {
     expect(compareNumericStrings(null, '0')).toBeGreaterThan(0)
     expect(compareNumericStrings('0', null)).toBeLessThan(0)
+  })
+})
+
+describe('isValidDecimals', () => {
+  it('accepts integers 0 through 77', () => {
+    expect(isValidDecimals(0)).toBe(true)
+    expect(isValidDecimals(18)).toBe(true)
+    expect(isValidDecimals(77)).toBe(true)
+  })
+
+  it('rejects non-integers, negatives, out-of-range and non-numbers', () => {
+    expect(isValidDecimals(1.5)).toBe(false)
+    expect(isValidDecimals(-1)).toBe(false)
+    expect(isValidDecimals(78)).toBe(false)
+    expect(isValidDecimals(Number.NaN)).toBe(false)
+    expect(isValidDecimals('6')).toBe(false)
+    expect(isValidDecimals(null)).toBe(false)
+  })
+})
+
+describe('normalizeQuantity', () => {
+  it('divides by 10^decimals exactly, with no truncation', () => {
+    // The worked example from the spec: 80 USDT stored as 80000000 at decimals 6.
+    expect(normalizeQuantity('80000000', 6)).toBe('80')
+    expect(normalizeQuantity('500000000000000000', 18)).toBe('0.5')
+    expect(normalizeQuantity('5', 18)).toBe('0.000000000000000005')
+    expect(normalizeQuantity('1234567890123', 6)).toBe('1234567.890123')
+  })
+
+  it('returns the integer unchanged at decimals 0', () => {
+    expect(normalizeQuantity('42', 0)).toBe('42')
+  })
+
+  it('returns "0" for a zero quantity', () => {
+    expect(normalizeQuantity('0', 18)).toBe('0')
+  })
+
+  it('returns null for a null/blank quantity or invalid decimals', () => {
+    expect(normalizeQuantity(null, 6)).toBeNull()
+    expect(normalizeQuantity('', 6)).toBeNull()
+    expect(normalizeQuantity('80000000', -1)).toBeNull()
+    expect(normalizeQuantity('80000000', 1.5)).toBeNull()
+  })
+})
+
+describe('formatNormalizedQuantity', () => {
+  it('formats the spec worked example', () => {
+    expect(formatNormalizedQuantity('80000000', 6)).toBe('80')
+  })
+
+  it('adds thousands separators to the integer part', () => {
+    expect(formatNormalizedQuantity('1500000000', 6)).toBe('1,500')
+    expect(formatNormalizedQuantity('1234567890123', 6)).toBe('1,234,567.890123')
+  })
+
+  it('truncates the fraction to 6 digits and strips trailing zeros', () => {
+    expect(formatNormalizedQuantity('500000000000000000', 18)).toBe('0.5')
+    // 1.2345678 at 18 decimals -> truncated, not rounded, to 6 fraction digits.
+    expect(formatNormalizedQuantity('1234567800000000000', 18)).toBe('1.234567')
+  })
+
+  it('marks non-zero dust below display precision rather than showing 0', () => {
+    expect(formatNormalizedQuantity('5', 18)).toBe('<0.000001')
+    expect(formatNormalizedQuantity('999999999999', 18)).toBe('<0.000001')
+  })
+
+  it('shows a true zero as "0", distinct from dust', () => {
+    expect(formatNormalizedQuantity('0', 18)).toBe('0')
+  })
+
+  it('returns null for a null quantity or invalid decimals', () => {
+    expect(formatNormalizedQuantity(null, 6)).toBeNull()
+    expect(formatNormalizedQuantity('80000000', 78)).toBeNull()
+  })
+})
+
+describe('compareNormalizedQuantity', () => {
+  it('orders correctly across different decimal scales', () => {
+    // 0.5 WETH (18 dp) vs 80 USDT (6 dp) — 0.5 is the smaller normalized value even
+    // though its raw integer (5e17) is far larger than 80000000.
+    expect(compareNormalizedQuantity('500000000000000000', 18, '80000000', 6)).toBeLessThan(0)
+    expect(compareNormalizedQuantity('80000000', 6, '500000000000000000', 18)).toBeGreaterThan(0)
+  })
+
+  it('returns 0 for equal normalized values at different scales', () => {
+    // 1 token at 6 dp vs 1 token at 18 dp.
+    expect(compareNormalizedQuantity('1000000', 6, '1000000000000000000', 18)).toBe(0)
+  })
+
+  it('sorts unknown decimals and null quantities last', () => {
+    expect(compareNormalizedQuantity('1', 6, '1', null)).toBeLessThan(0)
+    expect(compareNormalizedQuantity('1', null, '1', 6)).toBeGreaterThan(0)
+    expect(compareNormalizedQuantity(null, 6, '1', 6)).toBeGreaterThan(0)
+    expect(compareNormalizedQuantity(null, null, null, null)).toBe(0)
   })
 })

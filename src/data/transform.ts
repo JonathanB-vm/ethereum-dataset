@@ -91,6 +91,105 @@ export function decimalToWei(input: string, decimals: number): string | null {
   return (negative ? -scaled : scaled).toString()
 }
 
+/** Fraction digits shown in the table. Beyond this, a value is truncated — never rounded. */
+const NORMALIZED_DISPLAY_DIGITS = 6
+
+/**
+ * A token's `decimals` is only usable if it is a plain integer in 0..77 — 77 is the most
+ * base-10 digits a 256-bit unsigned integer can carry, so anything larger could not describe
+ * a real on-chain quantity. Everything else (empty, negative, fractional, non-numeric) is
+ * "unknown", which the UI renders as a dash rather than guessing a divisor.
+ */
+export function isValidDecimals(d: unknown): d is number {
+  return typeof d === 'number' && Number.isInteger(d) && d >= 0 && d <= 77
+}
+
+/** Splits |quantity| into its whole part and its zero-padded fractional digits. */
+function splitScaled(quantity: string | null, decimals: number) {
+  if (!isValidDecimals(decimals)) return null
+  const raw = toBigInt(quantity)
+  if (raw == null) return null
+  const negative = raw < 0n
+  const abs = negative ? -raw : raw
+  const divisor = 10n ** BigInt(decimals)
+  return {
+    negative,
+    isZero: abs === 0n,
+    whole: abs / divisor,
+    // padStart to `decimals` so 5 at 18 dp yields "000000000000000005", not "5".
+    frac: decimals === 0 ? '' : (abs % divisor).toString().padStart(decimals, '0'),
+  }
+}
+
+/**
+ * `quantity ÷ 10^decimals` as an exact decimal string — every digit, no truncation. This is
+ * the lossless form: it is what the CSV export writes, so a normalized value round-trips
+ * with the same fidelity as the raw columns. `formatNormalizedQuantity` is the display form.
+ */
+export function normalizeQuantity(quantity: string | null, decimals: number): string | null {
+  const parts = splitScaled(quantity, decimals)
+  if (parts == null) return null
+  const frac = parts.frac.replace(/0+$/, '')
+  const body = frac === '' ? parts.whole.toString() : `${parts.whole}.${frac}`
+  return parts.negative ? `-${body}` : body
+}
+
+/**
+ * Display form: thousands separators on the whole part (matching `BigNumCell`, the Quantity
+ * column this sits beside) and at most 6 fraction digits.
+ *
+ * The `<0.000001` case is the reason this isn't just `normalizeQuantity` truncated: an
+ * 18-decimal token's dust would otherwise render as a bare "0", indistinguishable from a
+ * genuine zero-value transfer. Truncating to a marker keeps "something small moved" and
+ * "nothing moved" visually distinct.
+ */
+export function formatNormalizedQuantity(
+  quantity: string | null,
+  decimals: number,
+): string | null {
+  const parts = splitScaled(quantity, decimals)
+  if (parts == null) return null
+
+  const frac = parts.frac.slice(0, NORMALIZED_DISPLAY_DIGITS).replace(/0+$/, '')
+  const whole = parts.whole.toLocaleString('en-US')
+
+  let body: string
+  if (frac !== '') {
+    body = `${whole}.${frac}`
+  } else if (!parts.isZero && parts.whole === 0n) {
+    // Non-zero, but every significant digit sits past the display precision.
+    return `${parts.negative ? '>-' : '<'}0.${'0'.repeat(NORMALIZED_DISPLAY_DIGITS - 1)}1`
+  } else {
+    body = whole
+  }
+  return parts.negative ? `-${body}` : body
+}
+
+/**
+ * Compares two normalized quantities that may be on *different* scales — the whole point of
+ * sorting this column, since each row's divisor comes from its own token contract.
+ *
+ * Compares `a / 10^da` against `b / 10^db` by cross-multiplication (`a·10^db` vs `b·10^da`),
+ * which is exact in `BigInt` and needs no division. Doing this in floating point would
+ * misorder values near the top of the 256-bit range. Nulls and unknown decimals sort last,
+ * matching `compareNumericStrings`.
+ */
+export function compareNormalizedQuantity(
+  aQty: string | null,
+  aDec: number | null,
+  bQty: string | null,
+  bDec: number | null,
+): number {
+  const a = isValidDecimals(aDec) ? toBigInt(aQty) : null
+  const b = isValidDecimals(bDec) ? toBigInt(bQty) : null
+  if (a == null && b == null) return 0
+  if (a == null) return 1
+  if (b == null) return -1
+  const left = a * 10n ** BigInt(bDec as number)
+  const right = b * 10n ** BigInt(aDec as number)
+  return left < right ? -1 : left > right ? 1 : 0
+}
+
 /** Numeric-aware comparator for BigQuery numeric strings. Nulls sort last. */
 export function compareNumericStrings(a: string | null, b: string | null): number {
   const ba = toBigInt(a)

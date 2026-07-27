@@ -36,7 +36,8 @@ function parseArgs(argv) {
     process.exit(1)
   }
   const out = flag('--out', path.join(process.cwd(), 'public', 'data'))
-  return { source, rows: flag('--rows', path.join(out, 'rows.csv.gz')), out }
+  const defaultRows = path.join(process.cwd(), 'public', 'data', 'rows.csv.gz')
+  return { source, rows: flag('--rows', defaultRows), out }
 }
 
 /** Streams the shipped row artifact, collecting every distinct token-contract address. */

@@ -170,6 +170,14 @@ function filterFor(field: DictionaryField) {
  * `sortDescFirst`, so the very first click already sorts descending, and a comparator that
  * only knows how to sort unknowns last in *ascending* order (as `compareNormalizedQuantity`
  * does, matching `compareNumericStrings`) would put them first on that first click instead.
+ *
+ * Known limitation (reviewed, accepted): in `@tanstack/table-core@8.21.3`, `sortUndefined`'s
+ * generated comparator returns a constant `1` — not `0` — when *both* rows' values are
+ * undefined, so it is inconsistent over that group and skips both `sortingFn` and TanStack's
+ * stable row-index tie-break for it. In a multi-sort with this column primary, the
+ * unknown-decimals rows are therefore not ordered by the secondary sort column — their
+ * relative order is left to V8's sort. The numeric `sortUndefined` alternative was rejected:
+ * it reintroduces unknowns sorting *first* on a descending sort.
  */
 function normalizedQuantityColumn(tokens: TokenRegistry): ColumnDef<EthRecord> {
   return helper.accessor(

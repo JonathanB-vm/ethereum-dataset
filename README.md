@@ -138,7 +138,7 @@ hard-coded.
 
 ## Testing
 
-`npm test` runs 160 unit tests across 18 Vitest suites covering the dictionary, CSV
+`npm test` runs 274 unit tests across 31 Vitest suites covering the dictionary, CSV
 parsing and row validation, gzip decoding, the dataset-prep helpers, the calldata
 provider, BigInt transforms, dataset/column stats, filter functions, debounced search,
 pagination ranges, column definitions, and CSV export.

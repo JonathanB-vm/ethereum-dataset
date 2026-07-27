@@ -14,8 +14,8 @@ const ALL_SOURCES: ColumnMeta['source'][] = ['both', 'token_transfers', 'transac
 
 /**
  * Which source sections a filter selection shows. 'both' includes the derived group:
- * its one field (is_token_transfer) belongs to neither record type alone, so the shared
- * view is the only filtered view where it isn't misleading.
+ * its two fields (is_token_transfer, normalized_quantity) belong to neither record type
+ * alone, so the shared view is the only filtered view where they aren't misleading.
  */
 export function visibleSources(filter: SourceFilter | null): ColumnMeta['source'][] {
   if (filter == null) return ALL_SOURCES

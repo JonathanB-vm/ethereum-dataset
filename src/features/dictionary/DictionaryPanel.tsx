@@ -136,7 +136,7 @@ function InfoIcon() {
 
 interface DictionaryPanelProps {
   records: EthRecord[]
-  /** Set → single-column mode for this field. Unset → full mode, all 35 fields. */
+  /** Set → single-column mode for this field. Unset → full mode, all 36 fields. */
   field?: DictionaryField
   onClose: () => void
   /** Exit animation in progress — adds the `--closing` classes; unmount follows shortly. */
@@ -303,7 +303,7 @@ function FieldDetail({ field, meta, records }: { field: DictionaryField; meta: C
       <p className="dictionary-field__description">{meta.description}</p>
       <code className="dictionary-field__name">{field}</code>
       {meta.availability === 'derived' ? (
-        <p className="dictionary-detail__note">Computed in the browser — not a stored dataset column.</p>
+        <p className="dictionary-field__unavailable">Computed in the browser — not a stored dataset column.</p>
       ) : meta.availability === 'on-demand' ? (
         // Live stats need the value on every record. This one isn't in memory (it is 97%
         // of the source file's bytes), so say so rather than render a fabricated 0% fill.

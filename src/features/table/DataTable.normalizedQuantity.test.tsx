@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { DataTable } from './DataTable'
 import { DictionaryPanelProvider } from '../dictionary/DictionaryPanel'
@@ -18,13 +18,19 @@ const REGISTRY = parseTokenRegistry({
 // fixture holds a single fixed `block_timestamp`, so each row overrides it here too (not
 // just `block_number`) — otherwise every row would carry the same timestamp and the sort
 // assertions below (which key off block_timestamp) couldn't tell the rows apart.
+//
+// Deliberately NOT in the post-sort order the tests below assert: the unknown-decimals row
+// comes first here, and USDT/WETH are reversed relative to their expected sorted positions.
+// If clicking the Normalized Quantity header did nothing at all, the table would still show
+// this natural array order — which the sort assertions below would then fail to match. That
+// is what makes those assertions actually exercise the click rather than passing vacuously.
 const RECORDS = [
   mk({
-    transaction_hash: '0x1',
-    address: '0xusdt',
-    quantity: '80000000',
-    block_number: 25534200,
-    block_timestamp: '2026-07-14 23:35:11+00:00',
+    transaction_hash: '0x3',
+    address: '0xunknown',
+    quantity: '12345',
+    block_number: 25534202,
+    block_timestamp: '2026-07-14 23:35:35+00:00',
   }),
   mk({
     transaction_hash: '0x2',
@@ -34,11 +40,11 @@ const RECORDS = [
     block_timestamp: '2026-07-14 23:35:23+00:00',
   }),
   mk({
-    transaction_hash: '0x3',
-    address: '0xunknown',
-    quantity: '12345',
-    block_number: 25534202,
-    block_timestamp: '2026-07-14 23:35:35+00:00',
+    transaction_hash: '0x1',
+    address: '0xusdt',
+    quantity: '80000000',
+    block_number: 25534200,
+    block_timestamp: '2026-07-14 23:35:11+00:00',
   }),
 ]
 
@@ -78,6 +84,10 @@ describe('Normalized Quantity column', () => {
 
   it('is absent from the transactions and all-records tabs', () => {
     renderTable('transactions')
+    expect(headerTexts().join(' ')).not.toContain('Normalized Quantity')
+
+    cleanup()
+    renderTable('all')
     expect(headerTexts().join(' ')).not.toContain('Normalized Quantity')
   })
 

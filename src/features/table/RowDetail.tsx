@@ -1,7 +1,14 @@
 import { CopyButton } from '../../components/CopyButton'
 import { getColumnMeta } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
-import { formatNormalizedQuantity, formatTimestamp, truncateMiddle, weiToEth, weiToGwei } from '../../data/transform'
+import {
+  formatNormalizedQuantity,
+  formatTimestamp,
+  normalizeQuantity,
+  truncateMiddle,
+  weiToEth,
+  weiToGwei,
+} from '../../data/transform'
 import { lookupToken, type TokenRegistry } from '../../data/tokenRegistry'
 import { CalldataField } from './CalldataField'
 import { GROUPS, HUMAN_UNIT } from './rowDetailFields'
@@ -69,19 +76,25 @@ export function RowDetail({ record, tokens }: RowDetailProps) {
               // above it.
               if (field === 'normalized_quantity') {
                 const token = lookupToken(tokens, record.address)
-                const text =
-                  token == null ? null : formatNormalizedQuantity(record.quantity, token.decimals)
+                const exact = token == null ? null : normalizeQuantity(record.quantity, token.decimals)
+                const display = token == null ? null : formatNormalizedQuantity(record.quantity, token.decimals)
                 return (
                   <div key={String(field)} className="row-detail__field">
                     <span className="row-detail__field-label">{meta?.label ?? String(field)}</span>
-                    {text == null ? (
+                    {exact == null ? (
                       <span className="row-detail__field-value row-detail__field-value--empty">–</span>
                     ) : (
                       <span className="row-detail__field-value">
-                        <span className="row-detail__field-raw">{text}</span>
-                        {token?.symbol && (
-                          <span className="row-detail__field-human">{token.symbol}</span>
-                        )}
+                        <span className="row-detail__field-raw" title={exact}>
+                          {exact}
+                        </span>
+                        <CopyButton value={exact} />
+                      </span>
+                    )}
+                    {display != null && (
+                      <span className="row-detail__field-human">
+                        ≈ {display}
+                        {token?.symbol ? ` ${token.symbol}` : ''}
                       </span>
                     )}
                   </div>

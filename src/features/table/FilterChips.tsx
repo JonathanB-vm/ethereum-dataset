@@ -53,7 +53,8 @@ export function FilterChips({ table, tab }: FilterChipsProps) {
   if (totalChips === 0) return null
 
   return (
-    <div className="filter-chips">
+    <div className="chips-row filter-chips">
+      <span className="chips-row__label">Filters:</span>
       {hasGlobal && (
         <span className="filter-chip">
           Search: &ldquo;{globalFilter}&rdquo;

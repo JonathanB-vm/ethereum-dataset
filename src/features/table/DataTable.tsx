@@ -20,6 +20,7 @@ import type { BlockAxisEntry, EthRecord } from '../../data/types'
 import { customSortingFns, getColumnsForTab } from './columns'
 import { customFilterFns, tableGlobalFilterFn } from './filters'
 import { FilterChips } from './FilterChips'
+import { SortChips } from './SortChips'
 import { exitDuration } from '../../theme/motion'
 import { ExpandIcon } from './FullscreenToggle'
 import { pageRange } from './pageRange'
@@ -185,6 +186,7 @@ export function DataTable({ records, tab, blockAxis, onTableReady, globalFilter,
 
   return (
     <div id="table-panel" className="table-panel" role="tabpanel" aria-labelledby={`table-tab-${tab}`}>
+      <SortChips table={table} tab={tab} />
       <FilterChips table={table} tab={tab} />
       <div className="table-scroll">
         <table className={`data-table${tab === 'all' ? ' data-table--dense' : ''}`}>

@@ -1130,3 +1130,46 @@ tr:hover .copy-btn,
   opacity: 0.7;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- chip rows (SortChips + FilterChips share this) ---------- */
+
+.chips-row__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  align-self: center;
+}
+
+.chips-row__hint {
+  font-size: 0.72rem;
+  opacity: 0.5;
+  align-self: center;
+}
+
+.sort-chips {
+  /* Mirrors .filter-chips' own layout; see that rule above. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem 0;
+}
+
+.sort-chip__body {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sort-chip__ordinal {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+}

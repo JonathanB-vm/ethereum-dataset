@@ -393,6 +393,16 @@
   outline-offset: -1px;
 }
 
+.filter-popover__input--invalid {
+  border-color: var(--danger, #e5534b);
+}
+
+.filter-popover__error {
+  margin-top: 0.2rem;
+  font-size: 0.68rem;
+  color: var(--danger, #e5534b);
+}
+
 .filter-popover__list {
   display: flex;
   flex-direction: column;

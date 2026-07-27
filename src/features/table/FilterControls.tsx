@@ -1,16 +1,30 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import type { Column } from '@tanstack/react-table'
 import type { EthRecord } from '../../data/types'
 import type { ColumnMeta } from '../../data/dictionary'
 import { FilterPopover } from './FilterPopover'
 import { enumDisplayValue, type RangeFilterValue } from './filters'
+import { decimalToWei, toBigInt } from '../../data/transform'
+
+/**
+ * A column whose cells are displayed in a converted unit. `decimals` is the exponent that
+ * converts a typed bound back to the stored wei value — the same number `decimalRangeFilterFn`
+ * uses in filters.ts, kept here so the label and the validation can never disagree about
+ * which unit a bound is in.
+ */
+export interface RangeUnit {
+  /** Shown in the input labels, e.g. "ETH". */
+  label: string
+  /** 18 for ETH, 9 for Gwei. */
+  decimals: number
+}
 
 interface FilterControlsProps {
   column: Column<EthRecord, unknown>
   kind: ColumnMeta['kind']
   label: string
-  /** Only set for the two columns whose filterFn is 'rangeEth'/'rangeGwei' (columns.tsx) — labels the Min/Max inputs with the unit a typed bound is actually compared in. */
-  rangeUnit?: string
+  /** Only set for the two columns whose filterFn is 'rangeEth'/'rangeGwei' (columns.tsx). */
+  rangeUnit?: RangeUnit
 }
 
 const DEBOUNCE_MS = 250
@@ -73,49 +87,117 @@ function TextPanel({ column }: { column: Column<EthRecord, unknown> }) {
   )
 }
 
-/** `unit`, when set ('ETH'/'Gwei'), labels the inputs so a typed bound's unit is never a guess — see FilterControlsProps.rangeUnit. */
-function RangePanel({ column, unit }: { column: Column<EthRecord, unknown>; unit?: string }) {
+/**
+ * A typed bound as a comparable integer, using exactly the conversion the registered
+ * filterFn will use: raw integer parsing for `'range'` columns, decimal-to-wei for the
+ * `'rangeEth'`/`'rangeGwei'` ones. Null means "this text is not a number".
+ */
+function boundToComparable(raw: string, decimals: number | null): bigint | null {
+  const trimmed = raw.trim()
+  if (trimmed === '') return null
+  if (decimals == null) return toBigInt(trimmed)
+  const wei = decimalToWei(trimmed, decimals)
+  return wei == null ? null : BigInt(wei)
+}
+
+/** `unit`, when set, labels the inputs so a typed bound's unit is never a guess, and supplies the decimals its validation uses — see RangeUnit. */
+function RangePanel({ column, unit }: { column: Column<EthRecord, unknown>; unit?: RangeUnit }) {
   const initial = (column.getFilterValue() as RangeFilterValue | undefined) ?? {}
   const [min, setMin] = useState(initial.min ?? '')
   const [max, setMax] = useState(initial.max ?? '')
-  const unitSuffix = unit ? ` (${unit})` : ''
+  const [minError, setMinError] = useState<string | null>(null)
+  const [maxError, setMaxError] = useState<string | null>(null)
+  const errorIdBase = useId()
+  const unitSuffix = unit ? ` (${unit.label})` : ''
+  const decimals = unit?.decimals ?? null
 
   useEffect(() => {
     const t = window.setTimeout(() => {
+      // Validation rides this debounce rather than running per keystroke: a bound is
+      // half-typed for most of its life, and flagging "0." as an error mid-decimal would
+      // punish normal typing.
+      const minValue = min.trim() === '' ? null : boundToComparable(min, decimals)
+      const maxValue = max.trim() === '' ? null : boundToComparable(max, decimals)
+      const minInvalid = min.trim() !== '' && minValue == null
+      const maxInvalid = max.trim() !== '' && maxValue == null
+
       const next: RangeFilterValue = {}
-      if (min.trim() !== '') next.min = min.trim()
-      if (max.trim() !== '') next.max = max.trim()
+      // An unparseable bound is left OUT of the filter value, so a chip can never read
+      // `≥ abc`. `rangeFilter` would have ignored it anyway — the difference is that the
+      // message below now says why nothing happened.
+      if (!minInvalid && min.trim() !== '') next.min = min.trim()
+      if (!maxInvalid && max.trim() !== '') next.max = max.trim()
+
+      const reversed = minValue != null && maxValue != null && minValue > maxValue
+      setMinError(minInvalid ? 'Not a number' : reversed ? 'Min is greater than Max' : null)
+      setMaxError(maxInvalid ? 'Not a number' : null)
+
       column.setFilterValue(next.min == null && next.max == null ? undefined : next)
     }, DEBOUNCE_MS)
     return () => window.clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [min, max])
+  }, [min, max, decimals])
+
+  const minErrorId = `${errorIdBase}-min`
+  const maxErrorId = `${errorIdBase}-max`
+  // Explicit htmlFor/id association rather than the usual implicit label-wraps-input: with
+  // an implicit wrap, the error <span> would have to live inside the same <label> to sit
+  // beneath the input, which folds the error text into the label's accessible name the
+  // moment it renders (assistive tech — and getByLabelText — would read "Min Not a
+  // number" instead of "Min"). Explicit association keeps the label's name exactly the
+  // unit text no matter what else is in the field.
+  const minInputId = `${errorIdBase}-min-input`
+  const maxInputId = `${errorIdBase}-max-input`
 
   return (
     <div className="filter-popover__range">
-      <label className="filter-popover__field">
-        <span className="filter-popover__label">Min{unitSuffix}</span>
+      <div className="filter-popover__field">
+        <label htmlFor={minInputId} className="filter-popover__label">
+          Min{unitSuffix}
+        </label>
         <input
+          id={minInputId}
           type="text"
           inputMode={unit ? 'decimal' : 'numeric'}
-          className="filter-popover__input filter-popover__input--mono"
+          className={`filter-popover__input filter-popover__input--mono${
+            minError ? ' filter-popover__input--invalid' : ''
+          }`}
           value={min}
           onChange={(e) => setMin(e.target.value)}
           placeholder="0"
+          aria-invalid={minError ? true : undefined}
+          aria-describedby={minError ? minErrorId : undefined}
           autoFocus
         />
-      </label>
-      <label className="filter-popover__field">
-        <span className="filter-popover__label">Max{unitSuffix}</span>
+        {minError && (
+          <span id={minErrorId} className="filter-popover__error">
+            {minError}
+          </span>
+        )}
+      </div>
+      <div className="filter-popover__field">
+        <label htmlFor={maxInputId} className="filter-popover__label">
+          Max{unitSuffix}
+        </label>
         <input
+          id={maxInputId}
           type="text"
           inputMode={unit ? 'decimal' : 'numeric'}
-          className="filter-popover__input filter-popover__input--mono"
+          className={`filter-popover__input filter-popover__input--mono${
+            maxError ? ' filter-popover__input--invalid' : ''
+          }`}
           value={max}
           onChange={(e) => setMax(e.target.value)}
           placeholder="max"
+          aria-invalid={maxError ? true : undefined}
+          aria-describedby={maxError ? maxErrorId : undefined}
         />
-      </label>
+        {maxError && (
+          <span id={maxErrorId} className="filter-popover__error">
+            {maxError}
+          </span>
+        )}
+      </div>
     </div>
   )
 }

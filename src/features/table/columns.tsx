@@ -4,7 +4,7 @@ import type { EthRecord } from '../../data/types'
 import { compareNumericStrings } from '../../data/transform'
 import { DictionaryInfoTrigger } from '../dictionary/DictionaryPanel'
 import { SortableHeader } from './SortableHeader'
-import { FilterControls } from './FilterControls'
+import { FilterControls, type RangeUnit } from './FilterControls'
 import { BlockTimeFilterControl } from './BlockTimeFilterControl'
 import type { TabId } from './Tabs'
 import {
@@ -118,7 +118,7 @@ const helper = createColumnHelper<EthRecord>()
 /** Block and time are one constraint in this dataset, so both headers render the same control — see BlockTimeFilterControl. */
 const BLOCK_AXIS_FIELDS = new Set<DictionaryField>(['block_number', 'block_timestamp'])
 
-function header(tab: TabId, field: DictionaryField, rangeUnit?: string) {
+function header(tab: TabId, field: DictionaryField, rangeUnit?: RangeUnit) {
   const displayLabel = columnDisplayLabel(field, tab)
   const meta = getColumnMeta(field)
   const filterFn = meta ? filterFnForKind(meta.kind) : undefined
@@ -266,7 +266,7 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
     // column) converts a typed ETH bound to wei before comparing, so "≥ 1" here means
     // ≥ 1 ETH, matching what's displayed — not ≥ 1 wei, which off by 10^18 would make
     // almost every bound a no-op.
-    header: header('transactions', 'value_lossless_tx', 'ETH'),
+    header: header('transactions', 'value_lossless_tx', { label: 'ETH', decimals: 18 }),
     cell: (info) => <EthValueCell value={info.getValue()} />,
     sortingFn: 'bignum',
     sortDescFirst: descFirst('value_lossless_tx'),
@@ -276,7 +276,7 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
     // Same reasoning as above — displayed in Gwei, not the dictionary's raw "Gas Price"
     // (wei), so its filter ('rangeGwei') converts a typed Gwei bound to wei (off by 10^9
     // if left as the generic 'range').
-    header: header('transactions', 'gas_price_tx', 'Gwei'),
+    header: header('transactions', 'gas_price_tx', { label: 'Gwei', decimals: 9 }),
     cell: (info) => <GweiCell value={info.getValue()} />,
     sortingFn: 'bignum',
     sortDescFirst: descFirst('gas_price_tx'),

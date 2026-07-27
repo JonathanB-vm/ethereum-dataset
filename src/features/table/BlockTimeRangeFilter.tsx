@@ -44,6 +44,15 @@ export function BlockTimeRangeFilter({ axis, value, onChange, matchCount }: Bloc
   useEffect(() => {
     if (axis.length === 0) return
     const t = window.setTimeout(() => {
+      const orderedMin = String(axis[minIndex].block)
+      const orderedMax = String(axis[maxIndex].block)
+      // Normalize the boxes to what the readout, the sliders and the emitted range already
+      // agree on. A crossing edit or a padded entry would otherwise leave these two inputs
+      // contradicting every other part of the control. Guarded so it is idempotent: once
+      // the text matches, the re-run this schedules sets nothing and settles.
+      if (min !== orderedMin) setMin(orderedMin)
+      if (max !== orderedMax) setMax(orderedMax)
+
       // Both handles at the ends means "no constraint" — emitting a full-span range instead
       // would light the funnel and add a chip for a filter that excludes nothing. Comparing
       // positions (not the raw min/max strings) is what makes whitespace and zero-padding
@@ -53,13 +62,13 @@ export function BlockTimeRangeFilter({ axis, value, onChange, matchCount }: Bloc
         onChange(undefined)
         return
       }
-      onChange({ min: String(axis[minIndex].block), max: String(axis[maxIndex].block) })
+      onChange({ min: orderedMin, max: orderedMax })
     }, DEBOUNCE_MS)
     return () => window.clearTimeout(t)
     // `onChange` is deliberately absent: a parent that passes an inline arrow would otherwise
     // restart the debounce on every render. Same pattern as FilterControls.tsx's panels.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [minIndex, maxIndex, lastIndex, axis])
+  }, [minIndex, maxIndex, lastIndex, axis, min, max])
 
   if (axis.length === 0) {
     return <p className="filter-popover__empty">No blocks loaded</p>

@@ -75,4 +75,11 @@ describe('BlockTimeRangeFilter', () => {
     expect(screen.getByTestId('block-range-min-block')).toHaveTextContent('25,534,201')
     expect(screen.getByTestId('block-range-max-block')).toHaveTextContent('25,534,203')
   })
+
+  it('normalizes the text boxes themselves, not just the readout', async () => {
+    setup({ min: '25534200', max: '25534201' })
+    fireEvent.change(screen.getByLabelText('Min block'), { target: { value: '25534203' } })
+    await waitFor(() => expect(screen.getByLabelText('Min block')).toHaveValue('25534201'))
+    expect(screen.getByLabelText('Max block')).toHaveValue('25534203')
+  })
 })

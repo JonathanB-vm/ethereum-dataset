@@ -1,5 +1,6 @@
 import { CopyButton } from '../../components/CopyButton'
-import { formatBigInt, formatTimestamp, truncateHex, weiToEth, weiToGwei } from '../../data/transform'
+import { formatBigInt, formatNormalizedQuantity, formatTimestamp, truncateHex, weiToEth, weiToGwei } from '../../data/transform'
+import type { TokenInfo } from '../../data/tokenRegistry'
 
 /** Shared null/empty rendering — centered, faint, never blank (keeps row height + scan-ability). */
 export function NullCell() {
@@ -139,6 +140,52 @@ export function RawCell({ value }: { value: unknown }) {
   return (
     <span className="raw-cell" title={str}>
       {display}
+    </span>
+  )
+}
+
+/**
+ * A dash that says *why* it is a dash. The plain `NullCell` means "this row has no value
+ * here"; this one means "the value exists on-chain but we can't scale it", which is a
+ * property of our lookup, not of the row. Worth distinguishing: it is the majority case —
+ * only 64 of the dataset's 955 token contracts have known decimals.
+ */
+function UnknownDecimalsCell() {
+  return (
+    <span
+      className="cell-null cell-null-explained"
+      title="Token decimals unknown — this contract is not in the token registry"
+    >
+      –
+    </span>
+  )
+}
+
+/**
+ * `quantity ÷ 10^decimals` with the token's symbol — the amount as a person would state it,
+ * beside the raw stored integer in the Quantity column. Ethereum has no fractional integers,
+ * so every divisible token stores a scaled integer and declares the scale as `decimals`;
+ * without this column an 80 USDT transfer reads as 80,000,000.
+ *
+ * Zero renders faint (a real, meaningful value — same treatment as `EthValueCell`), while a
+ * non-zero amount too small to display renders `<0.000001` rather than collapsing to "0".
+ */
+export function NormalizedQuantityCell({
+  quantity,
+  token,
+}: {
+  quantity: string | null
+  token: TokenInfo | null
+}) {
+  if (quantity == null) return <NullCell />
+  if (token == null) return <UnknownDecimalsCell />
+  const text = formatNormalizedQuantity(quantity, token.decimals)
+  if (text == null) return <UnknownDecimalsCell />
+  const isZero = text === '0'
+  return (
+    <span className={`num-cell${isZero ? ' num-cell--faint' : ''}`}>
+      {text}
+      {token.symbol && <span className="num-cell__unit"> {token.symbol}</span>}
     </span>
   )
 }

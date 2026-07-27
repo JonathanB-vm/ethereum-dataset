@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Column } from '@tanstack/react-table'
 import type { EthRecord } from '../../data/types'
 import type { ColumnMeta } from '../../data/dictionary'
+import { FilterPopover } from './FilterPopover'
 import { enumDisplayValue, type RangeFilterValue } from './filters'
 
 interface FilterControlsProps {
@@ -26,80 +27,23 @@ function isFilterActive(kind: ColumnMeta['kind'], value: unknown): boolean {
 }
 
 /**
- * Per-column filter popover, opened from a funnel icon planted next to the sort button in
- * the header cell. Which panel renders is driven entirely by the column's dictionary
- * `kind` (see columns.tsx `filterFnForKind`) — the same axis that chose the registered
- * TanStack filterFn, so the control offered always matches the comparison actually run.
+ * Per-column filter panel. Which panel renders is driven entirely by the column's
+ * dictionary `kind` (see columns.tsx `filterFnForKind`) — the same axis that chose the
+ * registered TanStack filterFn, so the control offered always matches the comparison
+ * actually run. The funnel, popover and dismissal behavior live in FilterPopover.
  */
 export function FilterControls({ column, kind, label, rangeUnit }: FilterControlsProps) {
-  const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const filterValue = column.getFilterValue()
-  const isActive = isFilterActive(kind, filterValue)
-
-  useEffect(() => {
-    if (!open) return
-    function handlePointerDown(e: MouseEvent) {
-      // Outside click doesn't return focus to the trigger: the user just deliberately
-      // moved focus/attention somewhere else on the page (another header, a table cell,
-      // …), so forcing it back here would fight that action instead of respecting it.
-      // Escape, below, is a keyboard-only close with nowhere else for focus to logically
-      // go, which is exactly the case focus-return exists for.
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        setOpen(false)
-        triggerRef.current?.focus()
-      }
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [open])
-
+  const isActive = isFilterActive(kind, column.getFilterValue())
   return (
-    <div className="filter-control" ref={containerRef}>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={`filter-control__trigger${isActive ? ' filter-control__trigger--active' : ''}`}
-        aria-label={`Filter ${label}`}
-        aria-expanded={open}
-        onClick={(e) => {
-          // The sort toggle lives in a sibling button, not a parent — this stopPropagation
-          // is only to keep a click from immediately re-triggering the outside-click
-          // listener registered above once `open` flips true.
-          e.stopPropagation()
-          setOpen((o) => !o)
-        }}
-      >
-        <FunnelIcon />
-        {isActive && <span className="filter-control__dot" aria-hidden="true" />}
-      </button>
-      {open && (
-        <div
-          className="filter-popover"
-          role="dialog"
-          aria-label={`Filter ${label}`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {kind === 'number' || kind === 'bignum' ? (
-            <RangePanel column={column} unit={rangeUnit} />
-          ) : kind === 'enum' || kind === 'boolean' ? (
-            <EnumPanel column={column} />
-          ) : (
-            <TextPanel column={column} />
-          )}
-        </div>
+    <FilterPopover label={label} isActive={isActive}>
+      {kind === 'number' || kind === 'bignum' ? (
+        <RangePanel column={column} unit={rangeUnit} />
+      ) : kind === 'enum' || kind === 'boolean' ? (
+        <EnumPanel column={column} />
+      ) : (
+        <TextPanel column={column} />
       )}
-    </div>
+    </FilterPopover>
   )
 }
 
@@ -212,19 +156,5 @@ function EnumPanel({ column }: { column: Column<EthRecord, unknown> }) {
         </li>
       ))}
     </ul>
-  )
-}
-
-function FunnelIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="12" height="12" fill="none" aria-hidden="true">
-      <path
-        d="M2 3h12l-4.5 5.4V13l-3 1.3V8.4L2 3z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    </svg>
   )
 }

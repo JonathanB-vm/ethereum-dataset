@@ -426,6 +426,10 @@ function FullDictionary({ records }: { records: EthRecord[] }) {
  * the panel's focus trap already selects `[href]`, so the link joins the tab cycle without
  * any change there. `download` also pins the saved filename to the human-readable title
  * regardless of what the asset is called on disk.
+ *
+ * `data-tooltip` (styled in dictionary.css) rather than `title`: the native tooltip is
+ * ~1s late, unstyled, and never shows for keyboard users. `aria-label` carries the same
+ * text and remains the accessible name — the tooltip is its visual counterpart only.
  */
 function DownloadPdfLink() {
   return (
@@ -433,13 +437,15 @@ function DownloadPdfLink() {
       className="dictionary-panel__icon-btn"
       href="/ethereum-dataset.pdf"
       download="Ethereum Dataset.pdf"
-      aria-label="Download data dictionary (PDF)"
-      title="Download data dictionary (PDF)"
+      aria-label={DOWNLOAD_LABEL}
+      data-tooltip={DOWNLOAD_LABEL}
     >
       <DownloadIcon />
     </a>
   )
 }
+
+const DOWNLOAD_LABEL = 'Download data dictionary (PDF)'
 
 function CloseIcon() {
   return (

@@ -147,6 +147,52 @@
   background: var(--bg-inset);
 }
 
+/* These controls are icon-only, so `data-tooltip` on one draws its label as a ::after
+   beneath it — replacing the native `title`, which is ~1s late, unstyled, and never shows
+   on keyboard focus. The label is duplicated in aria-label, so the pseudo-element is
+   presentational; it is right-aligned to keep a wide label inside the 420px drawer. */
+.dictionary-panel__icon-btn[data-tooltip] {
+  position: relative;
+}
+
+.dictionary-panel__icon-btn[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 1;
+  padding: 4px 8px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raised);
+  opacity: 0;
+  /* Never intercepts the pointer: it sits directly under the control it describes, and a
+     hoverable tooltip there would flicker as the cursor crossed into it. */
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.dictionary-panel__icon-btn[data-tooltip]:hover::after,
+.dictionary-panel__icon-btn[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  /* Delay on the way in only (the base rule's 0s delay governs the way out), so a cursor
+     passing over the header on its way somewhere else never flashes the tooltip. */
+  transition-delay: 0.35s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Keep the intent delay, drop the fade. */
+  .dictionary-panel__icon-btn[data-tooltip]::after {
+    transition-duration: 0s;
+  }
+}
+
 .dictionary-panel__body {
   flex: 1;
   overflow-y: auto;

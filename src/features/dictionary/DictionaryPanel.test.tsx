@@ -14,6 +14,14 @@ describe('DictionaryPanel — download PDF link', () => {
     expect(link).toHaveAttribute('download', 'Ethereum Dataset.pdf')
   })
 
+  it('labels the icon with a CSS tooltip rather than a native title', () => {
+    render(<DictionaryPanel records={[]} onClose={vi.fn()} closing={false} />)
+    const link = screen.getByRole('link', { name: LINK_NAME })
+    expect(link).toHaveAttribute('data-tooltip', 'Download data dictionary (PDF)')
+    // Both at once would stack the browser's own tooltip on top of ours.
+    expect(link).not.toHaveAttribute('title')
+  })
+
   it('omits the PDF in single-field mode, which documents one column rather than all of them', () => {
     render(
       <DictionaryPanel records={[]} field="block_number" onClose={vi.fn()} closing={false} />,

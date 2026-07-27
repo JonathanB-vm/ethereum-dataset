@@ -81,7 +81,18 @@ export function BlockTimeRangeFilter({ axis, value, onChange, matchCount }: Bloc
       <div className="block-range__sliders">
         <input
           type="range"
-          className="block-range__slider block-range__slider--min"
+          // Both thumbs paint in DOM order (no z-index) by default, so the max input — added
+          // second, below — always sits on top. That's fine everywhere except the right end:
+          // once both handles collapse there (minIndex === lastIndex), the max thumb covers
+          // the min thumb *and* every drag on it clamps back via Math.max(value, minIndex),
+          // so the range can never be widened again. Raising the min input above the max one
+          // exactly in that state gives the min thumb back to the mouse without touching the
+          // (already-safe) left-collapse case, where max stays on top and draggable.
+          className={
+            minIndex === lastIndex
+              ? 'block-range__slider block-range__slider--min block-range__slider--top'
+              : 'block-range__slider block-range__slider--min'
+          }
           aria-label="Range start"
           min={0}
           max={lastIndex}

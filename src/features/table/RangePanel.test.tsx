@@ -54,6 +54,18 @@ describe('RangePanel validation', () => {
     expect(screen.queryByText('Not a number')).not.toBeInTheDocument()
   })
 
+  // Only the Gwei/9 pairing above had coverage; columns.tsx's `{ label: 'ETH', decimals: 18 }`
+  // (value_lossless_tx) and filters.ts's `rangeEth: decimalRangeFilterFn(18)` are two literals
+  // that must independently agree, so add the ETH/18 sibling directly. A value with more than
+  // 9 decimal places is what tells the two pairings apart — this bound is only meaningful
+  // (non-truncated) when the panel really is validating at 18 decimals, not 9.
+  it('validates an ETH bound at 18 decimals, so a value past 9 decimal places is legal there', async () => {
+    const { setFilterValue } = openPanel({ label: 'ETH', decimals: 18 })
+    fireEvent.change(screen.getByLabelText('Min (ETH)'), { target: { value: '0.000000000000000001' } })
+    await waitFor(() => expect(setFilterValue).toHaveBeenLastCalledWith({ min: '0.000000000000000001' }))
+    expect(screen.queryByText('Not a number')).not.toBeInTheDocument()
+  })
+
   it('calls out a reversed range rather than silently emptying the table', async () => {
     openPanel()
     fireEvent.change(screen.getByLabelText('Min'), { target: { value: '100' } })

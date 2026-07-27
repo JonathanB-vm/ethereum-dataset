@@ -1,5 +1,6 @@
 import type { Table } from '@tanstack/react-table'
 import type { EthRecord } from '../../data/types'
+import { formatCount } from '../../data/transform'
 import { columnDisplayLabel } from './columns'
 import type { RangeFilterValue } from './filters'
 import type { TabId } from './Tabs'
@@ -9,6 +10,21 @@ interface FilterChipsProps {
   /** Chip labels are tab-scoped (see columnDisplayLabel): the same field can render under
    *  a unit-specific header on the transactions tab but its raw dictionary label on 'all'. */
   tab: TabId
+}
+
+/** True for a bound that is a plain (optionally negative) base-10 integer — the only shape
+ *  `formatCount` (a `number` in, `toLocaleString` out) can round-trip safely. ETH/Gwei
+ *  decimal bounds ("0.5") and 256-bit numeric strings past `Number.MAX_SAFE_INTEGER` must
+ *  both fall through unformatted rather than risk `formatCount` mangling them. */
+function isSafeIntegerBound(value: string): boolean {
+  return /^-?\d+$/.test(value) && Number.isSafeInteger(Number(value))
+}
+
+/** Thousands-separates a bound for chip display when it's safe to (see isSafeIntegerBound
+ *  above); every other bound — decimals, not-yet-valid text, oversized integers — renders
+ *  exactly as typed. */
+function formatBound(value: string): string {
+  return isSafeIntegerBound(value) ? formatCount(Number(value)) : value
 }
 
 /** Human-readable summary of an active column filter's value — shape tells us which kind it came from (array = enum, object = range, string = text). */
@@ -21,9 +37,11 @@ function formatFilterValue(value: unknown): string | null {
   }
   if (value && typeof value === 'object') {
     const range = value as RangeFilterValue
-    const min = range.min?.trim()
-    const max = range.max?.trim()
-    if (!min && !max) return null
+    const minRaw = range.min?.trim()
+    const maxRaw = range.max?.trim()
+    if (!minRaw && !maxRaw) return null
+    const min = minRaw ? formatBound(minRaw) : undefined
+    const max = maxRaw ? formatBound(maxRaw) : undefined
     if (min && max) return `${min} – ${max}`
     if (min) return `≥ ${min}`
     return `≤ ${max}`

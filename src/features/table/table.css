@@ -455,12 +455,19 @@
 
 /* ---------- active-filter chips ---------- */
 
-.filter-chips {
+/* Shared flex layout for both chip rows — FilterChips.tsx and SortChips.tsx both render a
+   `<div className="chips-row ...">`, so this one rule is what keeps their spacing and
+   alignment identical. Row-specific rules (border, if any) live on the row's own class
+   below/further down (`.filter-chips`, `.sort-chips` near the bottom of this file). */
+.chips-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
+}
+
+.filter-chips {
   border-bottom: 1px solid var(--border);
 }
 
@@ -1059,6 +1066,14 @@ tr:hover .copy-btn,
   appearance: none;
 }
 
+/* Applied to the min input only, only while both handles sit on the same pixel at the
+   right end (minIndex === lastIndex, see BlockTimeRangeFilter.tsx) — without this, the max
+   input (later in the DOM, so on top by paint order) permanently traps the min thumb
+   underneath it there and the range can never be widened again from the mouse. */
+.block-range__slider--top {
+  z-index: 1;
+}
+
 .block-range__slider::-webkit-slider-runnable-track {
   height: 3px;
   border-radius: 999px;
@@ -1158,14 +1173,9 @@ tr:hover .copy-btn,
   align-self: center;
 }
 
-.sort-chips {
-  /* Mirrors .filter-chips' own layout; see that rule above. */
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.75rem 0;
-}
+/* Layout lives on the shared `.chips-row` rule (top of file, "active-filter chips" section)
+   so this row and `.filter-chips` can never drift out of visual sync again; nothing left
+   here is specific to the sort row. */
 
 .sort-chip__body {
   display: inline-flex;

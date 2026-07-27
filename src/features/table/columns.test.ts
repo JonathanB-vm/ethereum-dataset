@@ -197,4 +197,17 @@ describe('first-click sort direction', () => {
     expect(descFirst(all, 'value_tx')).toBe(true)
     expect(descFirst(all, 'chain_id_tx')).toBeFalsy()
   })
+
+  // The spot-checks above only sample a few named fields per tab. Without this sweep, a
+  // column added later that omits `sortDescFirst` would fall through to TanStack's own
+  // `getAutoSortDir()` — which returns 'desc' for numeric values — and silently descend
+  // first despite not being in DESC_FIRST_FIELDS, exactly the bug this branch already fixed
+  // once for every one of the 19 curated accessors.
+  it("sets sortDescFirst on every column, so none falls through to TanStack's auto direction", () => {
+    for (const tab of ['transfers', 'transactions', 'all'] as const) {
+      for (const def of getColumnsForTab(tab)) {
+        expect(typeof def.sortDescFirst).toBe('boolean')
+      }
+    }
+  })
 })

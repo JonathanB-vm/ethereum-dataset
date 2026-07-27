@@ -106,18 +106,21 @@ function filterFnForKind(kind: ColumnMeta['kind']): 'text' | 'range' | 'enumMult
 
 const helper = createColumnHelper<EthRecord>()
 
+/** Block and time are one constraint in this dataset, so both headers render the same control — see BlockTimeFilterControl. */
+const BLOCK_AXIS_FIELDS = new Set<DictionaryField>(['block_number', 'block_timestamp'])
+
 /**
- * Builds a header cell: sort control (SortableHeader) + filter popover (FilterControls),
- * driven by the field's dictionary `kind`. The label always routes through
+ * Builds a header cell: sort control (SortableHeader) + filter popover (FilterControls) —
+ * except for `block_number`/`block_timestamp` (see `BLOCK_AXIS_FIELDS`), where the filter
+ * side renders the shared `BlockTimeFilterControl` instead, since those two columns are one
+ * constraint rather than two independently-filterable ones. Driven by the field's dictionary
+ * `kind`. The label always routes through
  * `columnDisplayLabel(field, tab)` — the single source of truth FilterChips also reads —
  * so a header and its filter chip can never disagree. `rangeUnit` is only passed for the
  * two transactions-tab columns whose registered filterFn is the display-unit-aware
  * `'rangeEth'`/`'rangeGwei'` (see columns below) — it tells FilterControls to label its
  * Min/Max inputs "(ETH)"/"(Gwei)" so the unit a bound is compared in is never a guess.
  */
-/** Block and time are one constraint in this dataset, so both headers render the same control — see BlockTimeFilterControl. */
-const BLOCK_AXIS_FIELDS = new Set<DictionaryField>(['block_number', 'block_timestamp'])
-
 function header(tab: TabId, field: DictionaryField, rangeUnit?: RangeUnit) {
   const displayLabel = columnDisplayLabel(field, tab)
   const meta = getColumnMeta(field)

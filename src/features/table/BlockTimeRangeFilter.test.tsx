@@ -82,4 +82,10 @@ describe('BlockTimeRangeFilter', () => {
     await waitFor(() => expect(screen.getByLabelText('Min block')).toHaveValue('25534201'))
     expect(screen.getByLabelText('Max block')).toHaveValue('25534203')
   })
+
+  it('lets the range be widened again after both handles collapse at the last block', async () => {
+    const { onChange } = setup({ min: '25534203', max: '25534203' })
+    fireEvent.change(screen.getByLabelText('Range start'), { target: { value: '1' } })
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith({ min: '25534201', max: '25534203' }))
+  })
 })

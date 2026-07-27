@@ -32,32 +32,38 @@ export function BlockTimeRangeFilter({ axis, value, onChange, matchCount }: Bloc
   const [min, setMin] = useState(() => value?.min ?? firstBlock)
   const [max, setMax] = useState(() => value?.max ?? lastBlock)
 
+  const lastIndex = Math.max(axis.length - 1, 0)
+  const rawMinIndex = axisIndexForBlock(axis, min) ?? 0
+  const rawMaxIndex = axisIndexForBlock(axis, max) ?? lastIndex
+  // Ordering here rather than in the two slider handlers is what makes the guarantee hold for
+  // the text boxes too: whichever input moved last, the emitted range and the readout below
+  // read the same ordered pair, so neither can invert.
+  const minIndex = Math.min(rawMinIndex, rawMaxIndex)
+  const maxIndex = Math.max(rawMinIndex, rawMaxIndex)
+
   useEffect(() => {
+    if (axis.length === 0) return
     const t = window.setTimeout(() => {
       // Both handles at the ends means "no constraint" — emitting a full-span range instead
-      // would light the funnel and add a chip for a filter that excludes nothing.
-      if (min === firstBlock && max === lastBlock) {
+      // would light the funnel and add a chip for a filter that excludes nothing. Comparing
+      // positions (not the raw min/max strings) is what makes whitespace and zero-padding
+      // irrelevant, and emitting the axis's own canonical block numbers keeps the value
+      // filtered on identical to the value displayed.
+      if (minIndex === 0 && maxIndex === lastIndex) {
         onChange(undefined)
         return
       }
-      const next: RangeFilterValue = {}
-      if (min.trim() !== '') next.min = min.trim()
-      if (max.trim() !== '') next.max = max.trim()
-      onChange(next.min == null && next.max == null ? undefined : next)
+      onChange({ min: String(axis[minIndex].block), max: String(axis[maxIndex].block) })
     }, DEBOUNCE_MS)
     return () => window.clearTimeout(t)
     // `onChange` is deliberately absent: a parent that passes an inline arrow would otherwise
     // restart the debounce on every render. Same pattern as FilterControls.tsx's panels.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [min, max, firstBlock, lastBlock])
+  }, [minIndex, maxIndex, lastIndex, axis])
 
   if (axis.length === 0) {
     return <p className="filter-popover__empty">No blocks loaded</p>
   }
-
-  const lastIndex = axis.length - 1
-  const minIndex = axisIndexForBlock(axis, min) ?? 0
-  const maxIndex = axisIndexForBlock(axis, max) ?? lastIndex
 
   return (
     <div className="block-range">

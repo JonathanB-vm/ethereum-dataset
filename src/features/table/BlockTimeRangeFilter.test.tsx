@@ -61,4 +61,18 @@ describe('BlockTimeRangeFilter', () => {
     render(<BlockTimeRangeFilter axis={[]} value={undefined} onChange={vi.fn()} matchCount={0} />)
     expect(screen.getByText('No blocks loaded')).toBeInTheDocument()
   })
+
+  it('treats a zero-padded or space-padded full range as no constraint', async () => {
+    const { onChange } = setup({ min: '25534201' })
+    fireEvent.change(screen.getByLabelText('Min block'), { target: { value: ' 025534200 ' } })
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith(undefined))
+  })
+
+  it('orders a typed range that would otherwise invert', async () => {
+    const { onChange } = setup({ min: '25534200', max: '25534201' })
+    fireEvent.change(screen.getByLabelText('Min block'), { target: { value: '25534203' } })
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith({ min: '25534201', max: '25534203' }))
+    expect(screen.getByTestId('block-range-min-block')).toHaveTextContent('25,534,201')
+    expect(screen.getByTestId('block-range-max-block')).toHaveTextContent('25,534,203')
+  })
 })

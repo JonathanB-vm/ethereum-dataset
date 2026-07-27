@@ -16,7 +16,7 @@ import {
 } from '@tanstack/react-table'
 import { EmptyState } from '../../components/States'
 import { formatCount as fmt } from '../../data/transform'
-import type { EthRecord } from '../../data/types'
+import type { BlockAxisEntry, EthRecord } from '../../data/types'
 import { customSortingFns, getColumnsForTab } from './columns'
 import { customFilterFns, tableGlobalFilterFn } from './filters'
 import { FilterChips } from './FilterChips'
@@ -31,6 +31,9 @@ import './table.css'
 interface DataTableProps {
   records: EthRecord[]
   tab: TabId
+  /** Every distinct block with its timestamp, from the FULL dataset — not this tab's slice,
+   *  or the range control's handle labels would shift on every tab switch. */
+  blockAxis: BlockAxisEntry[]
   /** Lets a parent (Task 9: export + filter chips) reach the live TanStack instance. */
   onTableReady?: (table: Table<EthRecord>) => void
   /** Controlled from App.tsx, whose Header slot owns the global-search input. */
@@ -41,7 +44,7 @@ interface DataTableProps {
 const PAGE_SIZE_OPTIONS = [25, 50, 100]
 const DEFAULT_PAGE_SIZE = 50
 
-export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFilterChange }: DataTableProps) {
+export function DataTable({ records, tab, blockAxis, onTableReady, globalFilter, onGlobalFilterChange }: DataTableProps) {
   // `getColumnsForTab` returns one of three module-level constant arrays, so its identity
   // is already stable per tab — no useMemo needed to avoid rebuilding the column set.
   const columns = getColumnsForTab(tab)
@@ -126,6 +129,7 @@ export function DataTable({ records, tab, onTableReady, globalFilter, onGlobalFi
     sortingFns: customSortingFns,
     filterFns: customFilterFns,
     globalFilterFn: tableGlobalFilterFn,
+    meta: { blockAxis },
   })
 
   // Toggling calls `setExpandedState` directly (not `row.getToggleExpandedHandler()`,

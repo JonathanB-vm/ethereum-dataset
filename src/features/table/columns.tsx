@@ -1,10 +1,11 @@
-import { createColumnHelper, type Column, type ColumnDef, type SortingFn } from '@tanstack/react-table'
+import { createColumnHelper, type ColumnDef, type HeaderContext, type SortingFn } from '@tanstack/react-table'
 import { getColumnMeta, LOADED_COLUMNS, type ColumnMeta, type DictionaryField } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 import { compareNumericStrings } from '../../data/transform'
 import { DictionaryInfoTrigger } from '../dictionary/DictionaryPanel'
 import { SortableHeader } from './SortableHeader'
 import { FilterControls } from './FilterControls'
+import { BlockTimeFilterControl } from './BlockTimeFilterControl'
 import type { TabId } from './Tabs'
 import {
   AddressCell,
@@ -64,8 +65,9 @@ function txTypeLabel(v: number | null): string | null {
 }
 
 // Which registered TanStack filterFn (see filters.ts) a column kind gets, if any.
-// `timestamp` columns get no filter icon at all — the brief's Step 5 kind mapping doesn't
-// cover it, and sorting already gives time-range access without a redundant control.
+// `timestamp` columns get none of their own — `block_timestamp` is 1:1 with `block_number`,
+// so its header renders BlockTimeFilterControl (see `header` below), which writes
+// `block_number`'s range filter instead.
 function filterFnForKind(kind: ColumnMeta['kind']): 'text' | 'range' | 'enumMulti' | undefined {
   switch (kind) {
     case 'hex':
@@ -94,16 +96,25 @@ const helper = createColumnHelper<EthRecord>()
  * `'rangeEth'`/`'rangeGwei'` (see columns below) — it tells FilterControls to label its
  * Min/Max inputs "(ETH)"/"(Gwei)" so the unit a bound is compared in is never a guess.
  */
+/** Block and time are one constraint in this dataset, so both headers render the same control — see BlockTimeFilterControl. */
+const BLOCK_AXIS_FIELDS = new Set<DictionaryField>(['block_number', 'block_timestamp'])
+
 function header(tab: TabId, field: DictionaryField, rangeUnit?: string) {
   const displayLabel = columnDisplayLabel(field, tab)
   const meta = getColumnMeta(field)
   const filterFn = meta ? filterFnForKind(meta.kind) : undefined
-  return ({ column }: { column: Column<EthRecord, unknown> }) => (
+  const isBlockAxis = BLOCK_AXIS_FIELDS.has(field)
+  return ({ column, table }: HeaderContext<EthRecord, unknown>) => (
     <div className="col-header-cell">
       <DictionaryInfoTrigger field={field} label={displayLabel} />
       <SortableHeader label={displayLabel} column={column} />
-      {meta && filterFn && (
-        <FilterControls column={column} kind={meta.kind} label={displayLabel} rangeUnit={rangeUnit} />
+      {isBlockAxis ? (
+        <BlockTimeFilterControl table={table} label={displayLabel} />
+      ) : (
+        meta &&
+        filterFn && (
+          <FilterControls column={column} kind={meta.kind} label={displayLabel} rangeUnit={rangeUnit} />
+        )
       )}
     </div>
   )

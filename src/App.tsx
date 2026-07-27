@@ -4,7 +4,7 @@ import { Header } from './components/Header'
 import { ErrorState, LoadingState, MalformedNotice } from './components/States'
 import { csvProvider } from './data/csvProvider'
 import type { LoadResult } from './data/provider'
-import type { EthRecord } from './data/types'
+import type { BlockAxisEntry, EthRecord } from './data/types'
 import { formatTimestamp } from './data/transform'
 import { StatsBand } from './features/stats/StatsBand'
 import { computeStats } from './features/stats/computeStats'
@@ -22,6 +22,13 @@ interface LoadState {
   result?: LoadResult
   error?: string
 }
+
+// Stable fallback for when `stats` is null (still loading): `stats.blockAxis` from a
+// `useMemo` is already a stable reference, but a literal `[]` at the JSX call site below
+// would mint a brand-new array identity on every render. BlockTimeRangeFilter's debounce
+// effect has `axis` in its dependency array, so a fresh identity every render tears the
+// effect down and re-registers it constantly and the debounce never settles.
+const EMPTY_BLOCK_AXIS: BlockAxisEntry[] = []
 
 function App() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
@@ -258,6 +265,7 @@ function App() {
               <DataTable
                 records={tabRecords}
                 tab={activeTab}
+                blockAxis={stats?.blockAxis ?? EMPTY_BLOCK_AXIS}
                 onTableReady={handleTableReady}
                 globalFilter={debouncedFilter}
                 onGlobalFilterChange={setGlobalFilter}

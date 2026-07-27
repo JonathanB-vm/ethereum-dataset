@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { DataTable } from './DataTable'
 import { DictionaryPanelProvider } from '../dictionary/DictionaryPanel'
 import { BASE, TEST_AXIS, renderTransfersTable } from './__fixtures__/tableHarness'
+import { EMPTY_TOKEN_REGISTRY } from '../../data/tokenRegistry'
 import type { EthRecord } from '../../data/types'
 
 function renderTransactionsTable() {
@@ -16,6 +17,7 @@ function renderTransactionsTable() {
         blockAxis={TEST_AXIS}
         globalFilter=""
         onGlobalFilterChange={vi.fn()}
+        tokens={EMPTY_TOKEN_REGISTRY}
       />
     </DictionaryPanelProvider>,
   )

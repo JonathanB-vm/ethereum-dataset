@@ -17,6 +17,7 @@ import {
 import { EmptyState } from '../../components/States'
 import { formatCount as fmt } from '../../data/transform'
 import type { BlockAxisEntry, EthRecord } from '../../data/types'
+import type { TokenRegistry } from '../../data/tokenRegistry'
 import { customSortingFns, getColumnsForTab } from './columns'
 import { customFilterFns, tableGlobalFilterFn } from './filters'
 import { FilterChips } from './FilterChips'
@@ -40,12 +41,14 @@ interface DataTableProps {
   /** Controlled from App.tsx, whose Header slot owns the global-search input. */
   globalFilter: string
   onGlobalFilterChange: (value: string) => void
+  /** Token decimals lookup, for the derived Normalized Quantity column. Empty is valid. */
+  tokens: TokenRegistry
 }
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100]
 const DEFAULT_PAGE_SIZE = 50
 
-export function DataTable({ records, tab, blockAxis, onTableReady, globalFilter, onGlobalFilterChange }: DataTableProps) {
+export function DataTable({ records, tab, blockAxis, onTableReady, globalFilter, onGlobalFilterChange, tokens }: DataTableProps) {
   // `getColumnsForTab` returns one of three module-level constant arrays, so its identity
   // is already stable per tab — no useMemo needed to avoid rebuilding the column set.
   const columns = getColumnsForTab(tab)
@@ -266,7 +269,7 @@ export function DataTable({ records, tab, blockAxis, onTableReady, globalFilter,
                     {isExpanded && (
                       <tr className="row-detail-row">
                         <td colSpan={columns.length + 1}>
-                          <RowDetail record={row.original} />
+                          <RowDetail record={row.original} tokens={tokens} />
                         </td>
                       </tr>
                     )}
@@ -329,6 +332,7 @@ export function DataTable({ records, tab, blockAxis, onTableReady, globalFilter,
           record={fullscreenRow}
           onClose={closeRowFullscreen}
           closing={fullscreenClosing}
+          tokens={tokens}
         />
       )}
     </div>

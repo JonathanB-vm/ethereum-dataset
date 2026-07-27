@@ -4,6 +4,7 @@ import { Header } from './components/Header'
 import { ErrorState, LoadingState, MalformedNotice } from './components/States'
 import { csvProvider } from './data/csvProvider'
 import type { LoadResult } from './data/provider'
+import { EMPTY_TOKEN_REGISTRY } from './data/tokenRegistry'
 import type { BlockAxisEntry, EthRecord } from './data/types'
 import { formatTimestamp } from './data/transform'
 import { StatsBand } from './features/stats/StatsBand'
@@ -269,6 +270,11 @@ function App() {
                 onTableReady={handleTableReady}
                 globalFilter={debouncedFilter}
                 onGlobalFilterChange={setGlobalFilter}
+                // Task 7 replaces this with real state loaded from tokens.json; DataTable's
+                // `tokens` prop became required in this task, ahead of anything consuming
+                // it, so the empty registry keeps the app working (dash-only normalized
+                // cells) until that load lands.
+                tokens={EMPTY_TOKEN_REGISTRY}
               />
             </div>
           )}

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { EthRecord } from '../../data/types'
 import { truncateHex } from '../../data/transform'
+import type { TokenRegistry } from '../../data/tokenRegistry'
 import { RowDetail } from './RowDetail'
 
 interface RowFullscreenProps {
@@ -8,6 +9,9 @@ interface RowFullscreenProps {
   onClose: () => void
   /** Exit animation in progress — adds `--closing`; DataTable unmounts shortly after. */
   closing: boolean
+  /** Threaded straight through to RowDetail, so the promoted view can't disagree with the
+   *  inline expanded row it was opened from. */
+  tokens: TokenRegistry
 }
 
 /**
@@ -23,7 +27,7 @@ interface RowFullscreenProps {
  * this renders with role="dialog", App.tsx's table-fullscreen Escape handler already
  * defers to it: one Esc closes this, the next exits table fullscreen.
  */
-export function RowFullscreen({ record, onClose, closing }: RowFullscreenProps) {
+export function RowFullscreen({ record, onClose, closing, tokens }: RowFullscreenProps) {
   const closeBtnRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -90,7 +94,7 @@ export function RowFullscreen({ record, onClose, closing }: RowFullscreenProps) 
         </button>
       </div>
       <div className="row-fullscreen__body">
-        <RowDetail record={record} />
+        <RowDetail record={record} tokens={tokens} />
       </div>
     </div>
   )

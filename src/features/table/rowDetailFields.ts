@@ -17,7 +17,7 @@ export interface FieldGroup {
   fields: DictionaryField[]
 }
 
-// All 35 dictionary fields, partitioned into the brief's three groups. Order within each
+// All 36 dictionary fields, partitioned into the brief's three groups. Order within each
 // group follows COLUMNS' own CSV order. Every field in `dictionary.ts` appears exactly
 // once across the three arrays — enforced by `RowDetail.test.ts`, which asserts
 // `GROUPS.flatMap(g => g.fields)` is length- and set-equal to `COLUMNS.map(c => c.field)`
@@ -35,7 +35,8 @@ export const GROUPS: FieldGroup[] = [
     title: 'Token Transfer',
     fields: [
       'event_index', 'batch_index', 'address', 'event_type', 'event_hash', 'event_signature',
-      'operator_address', 'from_address', 'to_address', 'token_id', 'quantity', 'removed',
+      'operator_address', 'from_address', 'to_address', 'token_id', 'quantity',
+      'normalized_quantity', 'removed',
     ],
   },
   {

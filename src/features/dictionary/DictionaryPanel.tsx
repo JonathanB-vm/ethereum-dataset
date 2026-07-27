@@ -302,7 +302,9 @@ function FieldDetail({ field, meta, records }: { field: DictionaryField; meta: C
       </div>
       <p className="dictionary-field__description">{meta.description}</p>
       <code className="dictionary-field__name">{field}</code>
-      {meta.availability === 'on-demand' ? (
+      {meta.availability === 'derived' ? (
+        <p className="dictionary-detail__note">Computed in the browser — not a stored dataset column.</p>
+      ) : meta.availability === 'on-demand' ? (
         // Live stats need the value on every record. This one isn't in memory (it is 97%
         // of the source file's bytes), so say so rather than render a fabricated 0% fill.
         <p className="dictionary-field__unavailable">
@@ -404,6 +406,8 @@ function FullDictionary({ records }: { records: EthRecord[] }) {
                     <p className="dictionary-entry__description">{c.description}</p>
                     {stats ? (
                       <FillBar value={stats.fillRate} />
+                    ) : c.availability === 'derived' ? (
+                      <span className="dictionary-entry__on-demand">Derived</span>
                     ) : (
                       <span className="dictionary-entry__on-demand">On demand</span>
                     )}

@@ -2,6 +2,7 @@ import { render, within } from '@testing-library/react'
 import { vi } from 'vitest'
 import { DataTable } from '../DataTable'
 import { DictionaryPanelProvider } from '../../dictionary/DictionaryPanel'
+import { EMPTY_TOKEN_REGISTRY } from '../../../data/tokenRegistry'
 import type { BlockAxisEntry, EthRecord } from '../../../data/types'
 
 /** All 34 loaded fields, so a test can override just the ones it cares about via `mk`. */
@@ -44,6 +45,7 @@ export function renderTransfersTable() {
         blockAxis={TEST_AXIS}
         globalFilter=""
         onGlobalFilterChange={vi.fn()}
+        tokens={EMPTY_TOKEN_REGISTRY}
       />
     </DictionaryPanelProvider>,
   )

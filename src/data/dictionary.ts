@@ -1,11 +1,12 @@
 import type { EthRecord } from './types'
 
 /**
- * Every field the *dataset* has — which is one more than `EthRecord` carries. `input_tx`
- * is documented here but never held in memory (see `availability` below), so it is not a
- * key of `EthRecord`.
+ * Every field the *dataset* has — which is two more than `EthRecord` carries. `input_tx`
+ * is documented here but never held in memory (see `availability` below), and
+ * `normalized_quantity` is never on the wire at all — it's computed in the browser — so
+ * neither is a key of `EthRecord`.
  */
-export type DictionaryField = keyof EthRecord | 'input_tx'
+export type DictionaryField = keyof EthRecord | 'input_tx' | 'normalized_quantity'
 
 export interface ColumnMeta {
   field: DictionaryField
@@ -15,10 +16,12 @@ export interface ColumnMeta {
   kind: 'hex' | 'address' | 'number' | 'bignum' | 'timestamp' | 'enum' | 'boolean' | 'text'
   /**
    * `'loaded'` — the value is on every `EthRecord` in memory.
-   * `'on-demand'` — documented, but fetched per row through `CalldataProvider`. Anything
-   * that reads a value off a live record must iterate `LOADED_COLUMNS`, not `COLUMNS`.
+   * `'on-demand'` — documented, but fetched per row through `CalldataProvider`.
+   * `'derived'` — not in the dataset at all; computed in the browser from other fields.
+   * Anything that reads a value off a live record must iterate `LOADED_COLUMNS`, not
+   * `COLUMNS` — neither of the latter two has a value to read.
    */
-  availability: 'loaded' | 'on-demand'
+  availability: 'loaded' | 'on-demand' | 'derived'
 }
 
 /** A dictionary entry whose field really is present on `EthRecord`. */
@@ -44,6 +47,7 @@ export const COLUMNS: ColumnMeta[] = [
   { field: 'to_address', label: 'To', description: 'Address of the new owner of the token(s).', source: 'token_transfers', kind: 'address', availability: 'loaded' },
   { field: 'token_id', label: 'Token ID', description: 'Identifier of the token(s) being transferred.', source: 'token_transfers', kind: 'bignum', availability: 'loaded' },
   { field: 'quantity', label: 'Quantity', description: 'Quantity of tokens being transferred.', source: 'token_transfers', kind: 'bignum', availability: 'loaded' },
+  { field: 'normalized_quantity', label: 'Normalized Quantity', description: 'Quantity divided by the token contract’s decimals (quantity ÷ 10^decimals) — the amount in the units people actually use, e.g. 80 USDT rather than the stored 80000000. Computed in the browser from a token-decimals lookup; contracts absent from that lookup show no value.', source: 'derived', kind: 'bignum', availability: 'derived' },
   { field: 'removed', label: 'Removed', description: 'Whether or not the event was orphaned off the main chain.', source: 'token_transfers', kind: 'boolean', availability: 'loaded' },
   { field: 'nonce_tx', label: 'Nonce', description: 'Number of transactions made by the sender prior to this one.', source: 'transactions', kind: 'number', availability: 'loaded' },
   { field: 'from_address_tx', label: 'From (tx)', description: 'Address of the sender of the transaction.', source: 'transactions', kind: 'address', availability: 'loaded' },

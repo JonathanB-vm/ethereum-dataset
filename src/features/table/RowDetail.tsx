@@ -1,12 +1,14 @@
 import { CopyButton } from '../../components/CopyButton'
 import { getColumnMeta } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
-import { formatTimestamp, truncateMiddle, weiToEth, weiToGwei } from '../../data/transform'
+import { formatNormalizedQuantity, formatTimestamp, truncateMiddle, weiToEth, weiToGwei } from '../../data/transform'
+import { lookupToken, type TokenRegistry } from '../../data/tokenRegistry'
 import { CalldataField } from './CalldataField'
 import { GROUPS, HUMAN_UNIT } from './rowDetailFields'
 
 interface RowDetailProps {
   record: EthRecord
+  tokens: TokenRegistry
 }
 
 // Human-readable conversion, keyed by field — only the fields the brief calls out (ETH for
@@ -34,14 +36,16 @@ function rawString(value: unknown): string | null {
 
 /**
  * Expanded panel rendered under a table row (see DataTable.tsx) listing every one of the
- * 35 dictionary fields for that record, grouped into three sections (`GROUPS`, in
+ * 36 dictionary fields for that record, grouped into three sections (`GROUPS`, in
  * `./rowDetailFields`). Each loaded field shows its full raw value (mono, wrap-anywhere,
  * copyable) and, where the field's kind allows, a human-readable rendering beside it (ETH/
  * Gwei/formatted timestamp). The one on-demand field (`input_tx`) isn't held in memory —
  * see `getColumnMeta`'s `availability` — so it renders via `CalldataField`, which fetches
- * the value per row the moment it's expanded, instead of reading off `record`.
+ * the value per row the moment it's expanded, instead of reading off `record`. The one
+ * derived field (`normalized_quantity`) is likewise absent from `record`; it's computed
+ * from `tokens`, the registry passed down from `DataTable`/`RowFullscreen`.
  */
-export function RowDetail({ record }: RowDetailProps) {
+export function RowDetail({ record, tokens }: RowDetailProps) {
   return (
     <div className="row-detail">
       {GROUPS.map((group) => (
@@ -57,6 +61,30 @@ export function RowDetail({ record }: RowDetailProps) {
                     txHash={record.transaction_hash}
                     label={meta.label}
                   />
+                )
+              }
+              // Derived fields have no value on the record — `record[field]` would be
+              // undefined and render as a dash. This one is computed the same way the
+              // table cell computes it, so an expanded row can't disagree with the row
+              // above it.
+              if (field === 'normalized_quantity') {
+                const token = lookupToken(tokens, record.address)
+                const text =
+                  token == null ? null : formatNormalizedQuantity(record.quantity, token.decimals)
+                return (
+                  <div key={String(field)} className="row-detail__field">
+                    <span className="row-detail__field-label">{meta?.label ?? String(field)}</span>
+                    {text == null ? (
+                      <span className="row-detail__field-value row-detail__field-value--empty">–</span>
+                    ) : (
+                      <span className="row-detail__field-value">
+                        <span className="row-detail__field-raw">{text}</span>
+                        {token?.symbol && (
+                          <span className="row-detail__field-human">{token.symbol}</span>
+                        )}
+                      </span>
+                    )}
+                  </div>
                 )
               }
               const raw = rawString(record[field as keyof EthRecord])

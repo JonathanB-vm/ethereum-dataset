@@ -1,11 +1,13 @@
 import { createColumnHelper, type ColumnDef, type HeaderContext, type SortingFn } from '@tanstack/react-table'
 import { getColumnMeta, LOADED_COLUMNS, type ColumnMeta, type DictionaryField } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
-import { compareNumericStrings } from '../../data/transform'
+import { compareNormalizedQuantity, compareNumericStrings } from '../../data/transform'
+import { lookupToken, tokenDecimals, type TokenRegistry } from '../../data/tokenRegistry'
 import { DictionaryInfoTrigger } from '../dictionary/DictionaryPanel'
 import { SortableHeader } from './SortableHeader'
 import { FilterControls, type RangeUnit } from './FilterControls'
 import { BlockTimeFilterControl } from './BlockTimeFilterControl'
+import { normalizedRangeFilter, type RangeFilterValue } from './filters'
 import type { TabId } from './Tabs'
 import {
   AddressCell,
@@ -13,6 +15,7 @@ import {
   BigNumCell,
   EthValueCell,
   GweiCell,
+  NormalizedQuantityCell,
   NumberCell,
   RawCell,
   TimeCell,
@@ -150,7 +153,68 @@ function filterFor(field: DictionaryField) {
 
 // ---------- transfers tab ----------
 
-const transferColumns: ColumnDef<EthRecord>[] = [
+/**
+ * The derived Normalized Quantity column. Its sort and filter close over the registry rather
+ * than being registered by string key (the `bignum`/`rangeEth` pattern) because they need
+ * per-row metadata that isn't on the record — TanStack accepts a function directly, so no
+ * module augmentation is needed.
+ *
+ * The cell/filter read the raw `quantity` and `row.original.address` (looked up against
+ * `tokens`) directly off the row, not off the accessor's own value. The accessor itself
+ * returns `undefined` for a row with no normalizable value (unknown decimals, or no
+ * quantity) instead of the raw quantity — paired with `sortUndefined: 'last'`, that's what
+ * pins those rows to the bottom *regardless of sort direction*. TanStack applies
+ * `sortUndefined` before it negates the comparator's result for a descending sort (see
+ * `getSortedRowModel`), so it isn't subject to that negation the way a plain
+ * "return 1 to sort last" from `sortingFn` would be — a magnitude column here is
+ * `sortDescFirst`, so the very first click already sorts descending, and a comparator that
+ * only knows how to sort unknowns last in *ascending* order (as `compareNormalizedQuantity`
+ * does, matching `compareNumericStrings`) would put them first on that first click instead.
+ */
+function normalizedQuantityColumn(tokens: TokenRegistry): ColumnDef<EthRecord> {
+  return helper.accessor(
+    (r) => {
+      const decimals = tokenDecimals(tokens, r.address)
+      return decimals == null || r.quantity == null ? undefined : r.quantity
+    },
+    {
+      id: 'normalized_quantity',
+      // Note on the `header(...)` unit argument: `RangeUnit.decimals` drives only the popover's
+      // own bound *validation* (`FilterControls.boundToComparable`) and its `inputMode`, not
+      // the row comparison — the real per-row scaling happens in `normalizedRangeFilter` above.
+      // 18 is passed because it is the widest scale in this dataset, so no realistic bound is
+      // rejected as unparseable. The label makes the unit explicit: the inputs read
+      // "Min (token units)".
+      header: header('transfers', 'normalized_quantity', { label: 'token units', decimals: 18 }),
+      cell: (info) => (
+        <NormalizedQuantityCell
+          quantity={info.row.original.quantity}
+          token={lookupToken(tokens, info.row.original.address)}
+        />
+      ),
+      // A magnitude, like the `quantity` column it mirrors — biggest first is the interesting
+      // read. Not added to DESC_FIRST_FIELDS, which is keyed to the raw dictionary fields.
+      sortDescFirst: true,
+      sortUndefined: 'last',
+      sortingFn: (rowA, rowB) =>
+        compareNormalizedQuantity(
+          rowA.original.quantity,
+          tokenDecimals(tokens, rowA.original.address),
+          rowB.original.quantity,
+          tokenDecimals(tokens, rowB.original.address),
+        ),
+      filterFn: (row, _columnId, filterValue: RangeFilterValue | undefined) =>
+        normalizedRangeFilter(
+          row.original.quantity,
+          tokenDecimals(tokens, row.original.address),
+          filterValue ?? {},
+        ),
+    },
+  ) as ColumnDef<EthRecord>
+}
+
+function transferColumns(tokens: TokenRegistry): ColumnDef<EthRecord>[] {
+  return [
   helper.accessor('block_timestamp', {
     header: header('transfers', 'block_timestamp'),
     cell: (info) => <TimeCell value={info.getValue()} />,
@@ -207,6 +271,7 @@ const transferColumns: ColumnDef<EthRecord>[] = [
     sortDescFirst: descFirst('quantity'),
     filterFn: filterFor('quantity'),
   }),
+  normalizedQuantityColumn(tokens),
   helper.accessor('token_id', {
     header: header('transfers', 'token_id'),
     cell: (info) => <BigNumCell value={info.getValue()} />,
@@ -220,7 +285,8 @@ const transferColumns: ColumnDef<EthRecord>[] = [
     sortDescFirst: descFirst('event_index'),
     filterFn: filterFor('event_index'),
   }),
-] as ColumnDef<EthRecord>[]
+  ] as ColumnDef<EthRecord>[]
+}
 
 // ---------- transactions tab ----------
 
@@ -323,10 +389,14 @@ const allColumns: ColumnDef<EthRecord>[] = LOADED_COLUMNS.map((meta) =>
   }),
 ) as ColumnDef<EthRecord>[]
 
-export function getColumnsForTab(tab: TabId): ColumnDef<EthRecord>[] {
+/**
+ * `tokens` is only consumed by the transfers tab's derived Normalized Quantity column; the
+ * other two tabs ignore it and still return their module-level constant arrays.
+ */
+export function getColumnsForTab(tab: TabId, tokens: TokenRegistry): ColumnDef<EthRecord>[] {
   switch (tab) {
     case 'transfers':
-      return transferColumns
+      return transferColumns(tokens)
     case 'transactions':
       return transactionColumns
     case 'all':

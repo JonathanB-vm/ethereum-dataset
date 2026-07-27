@@ -3,32 +3,35 @@ import type { ReactElement } from 'react'
 import type { Column } from '@tanstack/react-table'
 import { columnDisplayLabel, getColumnsForTab } from './columns'
 import { LOADED_COLUMNS } from '../../data/dictionary'
+import { EMPTY_TOKEN_REGISTRY } from '../../data/tokenRegistry'
 import type { EthRecord } from '../../data/types'
 
-/** Every accessor column here is built with `helper.accessor(field, {...})`, which sets
- *  `accessorKey` to the field name (no explicit `id` — TanStack derives that later, at
- *  table-build time). Reading `accessorKey` off the raw ColumnDef is what lets these tests
- *  assert on field order/identity without spinning up a full `useReactTable` instance. */
-function fields(defs: ReturnType<typeof getColumnsForTab>): (keyof EthRecord)[] {
+/** Every curated accessor column here is built with `helper.accessor(field, {...})`, which
+ *  sets `accessorKey` to the field name (no explicit `id` — TanStack derives that later, at
+ *  table-build time) — except the derived Normalized Quantity column, which uses a function
+ *  accessor (`helper.accessor((r) => r.quantity, { id: 'normalized_quantity', ... })`) and so
+ *  carries an explicit `id` instead of an `accessorKey`. Falling back to `id` is what lets
+ *  these tests assert on field order/identity without spinning up a full `useReactTable`
+ *  instance. */
+function fields(defs: ReturnType<typeof getColumnsForTab>): string[] {
   return defs.map((d) => {
-    if (!('accessorKey' in d) || d.accessorKey == null) {
-      throw new Error(`column def missing accessorKey: ${JSON.stringify(d)}`)
-    }
-    return d.accessorKey as keyof EthRecord
+    if ('accessorKey' in d && d.accessorKey != null) return d.accessorKey as string
+    if (d.id != null) return d.id
+    throw new Error(`column def missing accessorKey and id: ${JSON.stringify(d)}`)
   })
 }
 
 describe('getColumnsForTab', () => {
   it("'all' returns exactly the 34 loaded dictionary columns, in CSV order", () => {
-    const defs = getColumnsForTab('all')
+    const defs = getColumnsForTab('all', EMPTY_TOKEN_REGISTRY)
     expect(defs).toHaveLength(34)
     expect(fields(defs)).toEqual(LOADED_COLUMNS.map((c) => c.field))
     expect(fields(defs)).not.toContain('input_tx')
   })
 
-  it("'transfers' returns the 10 curated transfer columns, in the spec'd order", () => {
-    const defs = getColumnsForTab('transfers')
-    expect(defs).toHaveLength(10)
+  it("'transfers' returns the 10 curated transfer columns plus the derived Normalized Quantity column, in the spec'd order", () => {
+    const defs = getColumnsForTab('transfers', EMPTY_TOKEN_REGISTRY)
+    expect(defs).toHaveLength(11)
     expect(fields(defs)).toEqual([
       'block_timestamp',
       'block_number',
@@ -38,13 +41,14 @@ describe('getColumnsForTab', () => {
       'from_address',
       'to_address',
       'quantity',
+      'normalized_quantity',
       'token_id',
       'event_index',
     ])
   })
 
   it("'transactions' returns the 11 curated transaction columns, in the spec'd order", () => {
-    const defs = getColumnsForTab('transactions')
+    const defs = getColumnsForTab('transactions', EMPTY_TOKEN_REGISTRY)
     expect(defs).toHaveLength(11)
     expect(fields(defs)).toEqual([
       'block_timestamp',
@@ -65,11 +69,11 @@ describe('getColumnsForTab', () => {
     const byField = (defs: ReturnType<typeof getColumnsForTab>, field: keyof EthRecord) =>
       defs.find((d) => 'accessorKey' in d && d.accessorKey === field)
 
-    const quantity = byField(getColumnsForTab('transfers'), 'quantity')
-    const tokenId = byField(getColumnsForTab('transfers'), 'token_id')
-    const valueEth = byField(getColumnsForTab('transactions'), 'value_lossless_tx')
-    const gasPrice = byField(getColumnsForTab('transactions'), 'gas_price_tx')
-    const gasLimit = byField(getColumnsForTab('transactions'), 'gas_tx')
+    const quantity = byField(getColumnsForTab('transfers', EMPTY_TOKEN_REGISTRY), 'quantity')
+    const tokenId = byField(getColumnsForTab('transfers', EMPTY_TOKEN_REGISTRY), 'token_id')
+    const valueEth = byField(getColumnsForTab('transactions', EMPTY_TOKEN_REGISTRY), 'value_lossless_tx')
+    const gasPrice = byField(getColumnsForTab('transactions', EMPTY_TOKEN_REGISTRY), 'gas_price_tx')
+    const gasLimit = byField(getColumnsForTab('transactions', EMPTY_TOKEN_REGISTRY), 'gas_tx')
 
     expect(quantity?.sortingFn).toBe('bignum')
     // token_id is also a bignum-kind field (a big-number STRING) — it must sort via the
@@ -84,7 +88,7 @@ describe('getColumnsForTab', () => {
   })
 
   it("'all' tab: every column whose dictionary kind is 'bignum' carries sortingFn 'bignum', and no other column does", () => {
-    const defs = getColumnsForTab('all')
+    const defs = getColumnsForTab('all', EMPTY_TOKEN_REGISTRY)
     const byField = (field: keyof EthRecord) => defs.find((d) => 'accessorKey' in d && d.accessorKey === field)
     const expectedBignumFields = new Set(LOADED_COLUMNS.filter((c) => c.kind === 'bignum').map((c) => c.field))
 
@@ -100,7 +104,7 @@ describe('getColumnsForTab', () => {
 
   it('block_number is range-filterable on both curated tabs and on all', () => {
     for (const tab of ['transfers', 'transactions', 'all'] as const) {
-      const def = getColumnsForTab(tab).find(
+      const def = getColumnsForTab(tab, EMPTY_TOKEN_REGISTRY).find(
         (d) => 'accessorKey' in d && d.accessorKey === 'block_number',
       )
       expect(def, `block_number missing from the ${tab} tab`).toBeDefined()
@@ -134,7 +138,7 @@ describe('columnDisplayLabel', () => {
  * (the second child of the `.col-header-cell` wrapper — the ⓘ info trigger sits first).
  */
 function headerLabel(tab: Parameters<typeof getColumnsForTab>[0], field: keyof EthRecord): string {
-  const def = getColumnsForTab(tab).find((d) => 'accessorKey' in d && d.accessorKey === field)
+  const def = getColumnsForTab(tab, EMPTY_TOKEN_REGISTRY).find((d) => 'accessorKey' in d && d.accessorKey === field)
   if (!def || typeof def.header !== 'function') {
     throw new Error(`no function header for ${String(field)} on tab ${tab}`)
   }
@@ -176,22 +180,22 @@ function descFirst(defs: ReturnType<typeof getColumnsForTab>, field: string): bo
 
 describe('first-click sort direction', () => {
   it('descends first on magnitude columns, so the interesting rows land on page 1', () => {
-    expect(descFirst(getColumnsForTab('transfers'), 'quantity')).toBe(true)
-    expect(descFirst(getColumnsForTab('transactions'), 'value_lossless_tx')).toBe(true)
-    expect(descFirst(getColumnsForTab('transactions'), 'gas_price_tx')).toBe(true)
-    expect(descFirst(getColumnsForTab('transactions'), 'gas_tx')).toBe(true)
+    expect(descFirst(getColumnsForTab('transfers', EMPTY_TOKEN_REGISTRY), 'quantity')).toBe(true)
+    expect(descFirst(getColumnsForTab('transactions', EMPTY_TOKEN_REGISTRY), 'value_lossless_tx')).toBe(true)
+    expect(descFirst(getColumnsForTab('transactions', EMPTY_TOKEN_REGISTRY), 'gas_price_tx')).toBe(true)
+    expect(descFirst(getColumnsForTab('transactions', EMPTY_TOKEN_REGISTRY), 'gas_tx')).toBe(true)
   })
 
   it('ascends first on positions, counters and identifiers', () => {
-    expect(descFirst(getColumnsForTab('transfers'), 'block_number')).toBeFalsy()
-    expect(descFirst(getColumnsForTab('transfers'), 'event_index')).toBeFalsy()
-    expect(descFirst(getColumnsForTab('transfers'), 'token_id')).toBeFalsy()
-    expect(descFirst(getColumnsForTab('transactions'), 'nonce_tx')).toBeFalsy()
-    expect(descFirst(getColumnsForTab('transactions'), 'transaction_index')).toBeFalsy()
+    expect(descFirst(getColumnsForTab('transfers', EMPTY_TOKEN_REGISTRY), 'block_number')).toBeFalsy()
+    expect(descFirst(getColumnsForTab('transfers', EMPTY_TOKEN_REGISTRY), 'event_index')).toBeFalsy()
+    expect(descFirst(getColumnsForTab('transfers', EMPTY_TOKEN_REGISTRY), 'token_id')).toBeFalsy()
+    expect(descFirst(getColumnsForTab('transactions', EMPTY_TOKEN_REGISTRY), 'nonce_tx')).toBeFalsy()
+    expect(descFirst(getColumnsForTab('transactions', EMPTY_TOKEN_REGISTRY), 'transaction_index')).toBeFalsy()
   })
 
   it('applies the same rule on the All Records tab', () => {
-    const all = getColumnsForTab('all')
+    const all = getColumnsForTab('all', EMPTY_TOKEN_REGISTRY)
     expect(descFirst(all, 'max_fee_per_gas_tx')).toBe(true)
     expect(descFirst(all, 'max_priority_fee_per_gas_tx')).toBe(true)
     expect(descFirst(all, 'value_tx')).toBe(true)
@@ -205,7 +209,7 @@ describe('first-click sort direction', () => {
   // once for every one of the 19 curated accessors.
   it("sets sortDescFirst on every column, so none falls through to TanStack's auto direction", () => {
     for (const tab of ['transfers', 'transactions', 'all'] as const) {
-      for (const def of getColumnsForTab(tab)) {
+      for (const def of getColumnsForTab(tab, EMPTY_TOKEN_REGISTRY)) {
         expect(typeof def.sortDescFirst).toBe('boolean')
       }
     }

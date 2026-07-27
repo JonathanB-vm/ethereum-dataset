@@ -1,7 +1,7 @@
 import type { FilterFn } from '@tanstack/react-table'
 import { LOADED_COLUMNS } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
-import { decimalToWei, toBigInt } from '../../data/transform'
+import { decimalToWei, isValidDecimals, toBigInt } from '../../data/transform'
 
 /** Per-column min/max filter state ({} or all-undefined means "no bound set"). */
 export interface RangeFilterValue {
@@ -40,6 +40,30 @@ export function rangeFilter(rawValue: string | number | null, range: RangeFilter
   if (minB != null && value < minB) return false
   if (maxB != null && value > maxB) return false
   return true
+}
+
+/**
+ * Range filter for the derived Normalized Quantity column. Bounds are typed in *token units*
+ * — "≥ 1" means one whole token — but each row is stored at its own contract's scale, so the
+ * bound is converted per row via that row's `decimals` before the ordinary BigInt comparison.
+ * A single fixed exponent (the `rangeEth`/`rangeGwei` approach) cannot work here: the unit
+ * genuinely differs from row to row.
+ *
+ * A row whose decimals are unknown fails any set bound — it has no normalized value to
+ * compare, the same reason `rangeFilter` rejects a null cell.
+ */
+export function normalizedRangeFilter(
+  quantity: string | null,
+  decimals: number | null,
+  range: RangeFilterValue,
+): boolean {
+  const minStr = range.min?.trim()
+  const maxStr = range.max?.trim()
+  if (!minStr && !maxStr) return true
+  if (!isValidDecimals(decimals) || quantity == null) return false
+  const min = minStr ? (decimalToWei(minStr, decimals) ?? undefined) : undefined
+  const max = maxStr ? (decimalToWei(maxStr, decimals) ?? undefined) : undefined
+  return rangeFilter(quantity, { min, max })
 }
 
 /** Canonical string form a raw cell value is compared against in an enum/boolean checkbox filter. */

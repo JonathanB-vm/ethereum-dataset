@@ -2,7 +2,7 @@ import { render, within } from '@testing-library/react'
 import { vi } from 'vitest'
 import { DataTable } from '../DataTable'
 import { DictionaryPanelProvider } from '../../dictionary/DictionaryPanel'
-import { EMPTY_TOKEN_REGISTRY } from '../../../data/tokenRegistry'
+import { EMPTY_TOKEN_REGISTRY, type TokenRegistry } from '../../../data/tokenRegistry'
 import type { BlockAxisEntry, EthRecord } from '../../../data/types'
 
 /** All 34 loaded fields, so a test can override just the ones it cares about via `mk`. */
@@ -33,7 +33,7 @@ export const TEST_AXIS: BlockAxisEntry[] = [
   { block: 25534202, time: '2026-07-14 23:35:35+00:00' },
 ]
 
-export function renderTransfersTable() {
+export function renderTransfersTable(tokens: TokenRegistry = EMPTY_TOKEN_REGISTRY) {
   render(
     // DataTable's header cells render DictionaryInfoTrigger (the ⓘ trigger) unconditionally,
     // which calls useDictionaryPanel() and throws outside a provider — App.tsx always wraps
@@ -45,7 +45,7 @@ export function renderTransfersTable() {
         blockAxis={TEST_AXIS}
         globalFilter=""
         onGlobalFilterChange={vi.fn()}
-        tokens={EMPTY_TOKEN_REGISTRY}
+        tokens={tokens}
       />
     </DictionaryPanelProvider>,
   )

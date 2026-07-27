@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { customFilterFns, enumFilter, globalFilterFn, rangeFilter, textFilter } from './filters'
+import { customFilterFns, enumFilter, globalFilterFn, normalizedRangeFilter, rangeFilter, textFilter } from './filters'
 import type { EthRecord } from '../../data/types'
 import type { Row } from '@tanstack/react-table'
 
@@ -208,5 +208,43 @@ describe('customFilterFns.rangeEth / rangeGwei (display-unit-aware range filters
 
   it('a null cell value fails an active bound', () => {
     expect(rangeEth(fakeRow(null), 'value_lossless_tx', { min: '1' })).toBe(false)
+  })
+})
+
+describe('normalizedRangeFilter', () => {
+  it('passes every row when no bound is set', () => {
+    expect(normalizedRangeFilter('80000000', 6, {})).toBe(true)
+    expect(normalizedRangeFilter('80000000', null, {})).toBe(true)
+    expect(normalizedRangeFilter(null, 6, {})).toBe(true)
+  })
+
+  it('scales the bound by the row’s own decimals', () => {
+    // "1" means one whole token, so 80 USDT passes and 0.5 USDT does not.
+    expect(normalizedRangeFilter('80000000', 6, { min: '1' })).toBe(true)
+    expect(normalizedRangeFilter('500000', 6, { min: '1' })).toBe(false)
+    // The same bound against an 18-decimal token.
+    expect(normalizedRangeFilter('1000000000000000000', 18, { min: '1' })).toBe(true)
+    expect(normalizedRangeFilter('500000000000000000', 18, { min: '1' })).toBe(false)
+  })
+
+  it('accepts fractional bounds', () => {
+    expect(normalizedRangeFilter('500000000000000000', 18, { min: '0.5' })).toBe(true)
+    expect(normalizedRangeFilter('400000000000000000', 18, { min: '0.5' })).toBe(false)
+  })
+
+  it('applies max bounds and both bounds together', () => {
+    expect(normalizedRangeFilter('80000000', 6, { max: '100' })).toBe(true)
+    expect(normalizedRangeFilter('80000000', 6, { max: '50' })).toBe(false)
+    expect(normalizedRangeFilter('80000000', 6, { min: '50', max: '100' })).toBe(true)
+  })
+
+  it('excludes rows with unknown decimals or no quantity once a bound is set', () => {
+    expect(normalizedRangeFilter('80000000', null, { min: '1' })).toBe(false)
+    expect(normalizedRangeFilter(null, 6, { min: '1' })).toBe(false)
+  })
+
+  it('treats an unparseable bound as not set, so mid-typing never blanks the table', () => {
+    expect(normalizedRangeFilter('80000000', 6, { min: 'abc' })).toBe(true)
+    expect(normalizedRangeFilter('80000000', 6, { min: '0.' })).toBe(true)
   })
 })

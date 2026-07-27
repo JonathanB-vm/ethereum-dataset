@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   flexRender,
   getCoreRowModel,
@@ -49,9 +49,11 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100]
 const DEFAULT_PAGE_SIZE = 50
 
 export function DataTable({ records, tab, blockAxis, onTableReady, globalFilter, onGlobalFilterChange, tokens }: DataTableProps) {
-  // `getColumnsForTab` returns one of three module-level constant arrays, so its identity
-  // is already stable per tab — no useMemo needed to avoid rebuilding the column set.
-  const columns = getColumnsForTab(tab)
+  // The transfers tab now builds its column array per call (it closes over `tokens` for the
+  // derived Normalized Quantity column), so this can no longer rely on the old module-level
+  // constant identity — without the memo, every render would hand useReactTable a new
+  // column array and reset its internal column state.
+  const columns = useMemo(() => getColumnsForTab(tab, tokens), [tab, tokens])
 
   const [sortingState, setSortingState] = useState<SortingState>([])
   const [paginationState, setPaginationState] = useState<PaginationState>({

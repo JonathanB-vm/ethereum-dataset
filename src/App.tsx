@@ -271,6 +271,7 @@ function App() {
                     tab={activeTab}
                     blockMin={stats?.blockMin ?? null}
                     blockMax={stats?.blockMax ?? null}
+                    tokens={tokens}
                   />
                 )}
                 {/* `!== 'off'` (not just 'on') so the collapse icon holds through the

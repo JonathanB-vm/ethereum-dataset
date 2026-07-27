@@ -4,6 +4,8 @@ import { LOADED_COLUMNS } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 import type { TabId } from '../table/Tabs'
 import { buildCsv, downloadCsv } from './exportCsv'
+import { normalizeQuantity } from '../../data/transform'
+import { tokenDecimals, type TokenRegistry } from '../../data/tokenRegistry'
 import './export.css'
 
 interface ExportButtonProps {
@@ -12,9 +14,10 @@ interface ExportButtonProps {
   /** Derived by the caller (App.tsx) from the loaded dataset — never hard-coded here. */
   blockMin: number | null
   blockMax: number | null
+  tokens: TokenRegistry
 }
 
-export function ExportButton({ table, tab, blockMin, blockMax }: ExportButtonProps) {
+export function ExportButton({ table, tab, blockMin, blockMax, tokens }: ExportButtonProps) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -56,10 +59,20 @@ export function ExportButton({ table, tab, blockMin, blockMax }: ExportButtonPro
     const rows = table.getSortedRowModel().rows
     const records = rows.map((r) => r.original)
     const fields = allColumns
-      ? LOADED_COLUMNS.map((c) => c.field)
-      : (table.getVisibleLeafColumns().map((c) => c.id) as (keyof EthRecord)[])
+      ? (LOADED_COLUMNS.map((c) => c.field) as string[])
+      : table.getVisibleLeafColumns().map((c) => c.id)
 
-    const csv = buildCsv(records, fields)
+    // The exact, full-precision value — no thousands separators and no symbol, unlike the
+    // on-screen cell. Display truncation must not reach the file: the export is meant to
+    // re-import losslessly, the same rule the raw numeric columns follow.
+    const derived = {
+      normalized_quantity: (r: EthRecord) => {
+        const decimals = tokenDecimals(tokens, r.address)
+        return decimals == null ? '' : (normalizeQuantity(r.quantity, decimals) ?? '')
+      },
+    }
+
+    const csv = buildCsv(records, fields, derived)
     const blockPart =
       blockMin == null || blockMax == null
         ? 'eth'

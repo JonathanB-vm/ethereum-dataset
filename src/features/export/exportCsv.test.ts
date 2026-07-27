@@ -104,3 +104,27 @@ describe('buildCsv', () => {
     expect(JSON.stringify(record)).toBe(snapshot)
   })
 })
+
+describe('buildCsv derived columns', () => {
+  const record = makeRecord({ address: '0xusdt', quantity: '80000000' })
+
+  it('resolves a derived column through the supplied resolver', () => {
+    const csv = buildCsv([record], ['quantity', 'normalized_quantity'], {
+      normalized_quantity: (r) => (r.quantity === '80000000' ? '80' : ''),
+    })
+    expect(csv).toContain('quantity,normalized_quantity')
+    expect(csv).toContain('80000000,80')
+  })
+
+  it('emits an empty cell for a derived column with no resolver', () => {
+    const csv = buildCsv([record], ['quantity', 'normalized_quantity'])
+    expect(csv).toContain('80000000,')
+  })
+
+  it('still exports plain record fields losslessly', () => {
+    // Regression guard: the signature widened from (keyof EthRecord)[] to string[].
+    const big = makeRecord({ value_lossless_tx: LOSSLESS_VALUE })
+    const csv = buildCsv([big], ['value_lossless_tx'])
+    expect(csv).toContain(LOSSLESS_VALUE)
+  })
+})

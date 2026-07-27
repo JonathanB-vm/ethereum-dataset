@@ -43,7 +43,17 @@ function parseArgs(argv) {
 function readDatasetAddresses(rowsPath) {
   const addresses = new Set()
   return new Promise((resolve, reject) => {
-    Papa.parse(fs.createReadStream(rowsPath).pipe(zlib.createGunzip()), {
+    const source = fs.createReadStream(rowsPath)
+    const gunzip = zlib.createGunzip()
+    // Plain `source.pipe(gunzip)` does not forward `source`'s 'error' events to `gunzip` —
+    // a long-standing Node stream gotcha — so a missing/unreadable rowsPath would otherwise
+    // emit an unhandled 'error' on `source` that bypasses this promise entirely and crashes
+    // the process with a raw ENOENT stack trace instead of routing through `main()`'s catch.
+    // Forwarding it onto `gunzip` puts it on the same listener Papa.parse below already uses
+    // (`error: reject`), so every failure here — bad gzip, missing file, whatever — resolves
+    // the same way `readTokenRows` does when Papaparse reads a stream directly.
+    source.on('error', (err) => gunzip.emit('error', err))
+    Papa.parse(source.pipe(gunzip), {
       header: true,
       skipEmptyLines: 'greedy',
       step: (result) => {

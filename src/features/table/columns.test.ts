@@ -160,3 +160,35 @@ describe('column-def header labels (the rendered path, not just the utility)', (
     expect(headerLabel('transactions', 'gas_tx')).toBe('Gas Limit')
   })
 })
+
+/** `sortDescFirst` lives directly on the ColumnDef, so it can be read off without a table instance. */
+function descFirst(defs: ReturnType<typeof getColumnsForTab>, field: string): boolean | undefined {
+  const def = defs.find((d) => 'accessorKey' in d && d.accessorKey === field)
+  if (!def) throw new Error(`no column def for ${field}`)
+  return def.sortDescFirst
+}
+
+describe('first-click sort direction', () => {
+  it('descends first on magnitude columns, so the interesting rows land on page 1', () => {
+    expect(descFirst(getColumnsForTab('transfers'), 'quantity')).toBe(true)
+    expect(descFirst(getColumnsForTab('transactions'), 'value_lossless_tx')).toBe(true)
+    expect(descFirst(getColumnsForTab('transactions'), 'gas_price_tx')).toBe(true)
+    expect(descFirst(getColumnsForTab('transactions'), 'gas_tx')).toBe(true)
+  })
+
+  it('ascends first on positions, counters and identifiers', () => {
+    expect(descFirst(getColumnsForTab('transfers'), 'block_number')).toBeFalsy()
+    expect(descFirst(getColumnsForTab('transfers'), 'event_index')).toBeFalsy()
+    expect(descFirst(getColumnsForTab('transfers'), 'token_id')).toBeFalsy()
+    expect(descFirst(getColumnsForTab('transactions'), 'nonce_tx')).toBeFalsy()
+    expect(descFirst(getColumnsForTab('transactions'), 'transaction_index')).toBeFalsy()
+  })
+
+  it('applies the same rule on the All Records tab', () => {
+    const all = getColumnsForTab('all')
+    expect(descFirst(all, 'max_fee_per_gas_tx')).toBe(true)
+    expect(descFirst(all, 'max_priority_fee_per_gas_tx')).toBe(true)
+    expect(descFirst(all, 'value_tx')).toBe(true)
+    expect(descFirst(all, 'chain_id_tx')).toBeFalsy()
+  })
+})

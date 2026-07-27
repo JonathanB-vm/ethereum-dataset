@@ -53,6 +53,25 @@ const DISPLAY_LABEL_OVERRIDES: Partial<Record<keyof EthRecord, string>> = {
   gas_price_tx: 'Gas Price Gwei',
 }
 
+// Columns where "biggest" is the interesting end, so the first header click should descend.
+// Deliberately an explicit list rather than derived from `kind`: `kind: 'number' | 'bignum'`
+// also covers block_number, transaction_index, event_index, batch_index, nonce_tx and
+// chain_id_tx — positions and counters, where ascending is the natural first read — and
+// token_id, which is a bignum but an identifier, not a magnitude.
+const DESC_FIRST_FIELDS = new Set<DictionaryField>([
+  'quantity',
+  'value_tx',
+  'value_lossless_tx',
+  'gas_tx',
+  'gas_price_tx',
+  'max_fee_per_gas_tx',
+  'max_priority_fee_per_gas_tx',
+])
+
+function descFirst(field: DictionaryField): boolean {
+  return DESC_FIRST_FIELDS.has(field)
+}
+
 export function columnDisplayLabel(field: DictionaryField, tab: TabId): string {
   if (tab === 'all') return metaLabel(field)
   return DISPLAY_LABEL_OVERRIDES[field as keyof EthRecord] ?? metaLabel(field)
@@ -167,6 +186,7 @@ const transferColumns: ColumnDef<EthRecord>[] = [
     header: header('transfers', 'quantity'),
     cell: (info) => <BigNumCell value={info.getValue()} />,
     sortingFn: 'bignum',
+    sortDescFirst: descFirst('quantity'),
     filterFn: filterFor('quantity'),
   }),
   helper.accessor('token_id', {
@@ -225,6 +245,7 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
     header: header('transactions', 'value_lossless_tx', 'ETH'),
     cell: (info) => <EthValueCell value={info.getValue()} />,
     sortingFn: 'bignum',
+    sortDescFirst: descFirst('value_lossless_tx'),
     filterFn: 'rangeEth',
   }),
   helper.accessor('gas_price_tx', {
@@ -234,11 +255,13 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
     header: header('transactions', 'gas_price_tx', 'Gwei'),
     cell: (info) => <GweiCell value={info.getValue()} />,
     sortingFn: 'bignum',
+    sortDescFirst: descFirst('gas_price_tx'),
     filterFn: 'rangeGwei',
   }),
   helper.accessor('gas_tx', {
     header: header('transactions', 'gas_tx'),
     cell: (info) => <NumberCell value={info.getValue()} />,
+    sortDescFirst: descFirst('gas_tx'),
     filterFn: filterFor('gas_tx'),
   }),
   helper.accessor('nonce_tx', {
@@ -266,6 +289,7 @@ const allColumns: ColumnDef<EthRecord>[] = LOADED_COLUMNS.map((meta) =>
     header: header('all', meta.field),
     cell: (info) => <RawCell value={info.getValue()} />,
     sortingFn: meta.kind === 'bignum' ? 'bignum' : undefined,
+    sortDescFirst: descFirst(meta.field),
     filterFn: filterFor(meta.field),
   }),
 ) as ColumnDef<EthRecord>[]

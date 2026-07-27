@@ -130,6 +130,11 @@ export function DataTable({ records, tab, blockAxis, onTableReady, globalFilter,
     sortingFns: customSortingFns,
     filterFns: customFilterFns,
     globalFilterFn: tableGlobalFilterFn,
+    // Written down rather than inherited: SortChips and the header ordinals exist entirely
+    // to surface shift-click multi-sort, so the behavior they describe must not be able to
+    // change out from under them via a library default.
+    enableMultiSort: true,
+    isMultiSortEvent: (e) => (e as { shiftKey?: boolean }).shiftKey === true,
     meta: { blockAxis },
   })
 

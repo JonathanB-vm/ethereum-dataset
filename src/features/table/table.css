@@ -1173,3 +1173,11 @@ tr:hover .copy-btn,
   font-variant-numeric: tabular-nums;
   opacity: 0.6;
 }
+
+.col-header__ordinal {
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  vertical-align: super;
+  opacity: 0.75;
+}

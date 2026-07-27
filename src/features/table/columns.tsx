@@ -126,7 +126,7 @@ function header(tab: TabId, field: DictionaryField, rangeUnit?: string) {
   return ({ column, table }: HeaderContext<EthRecord, unknown>) => (
     <div className="col-header-cell">
       <DictionaryInfoTrigger field={field} label={displayLabel} />
-      <SortableHeader label={displayLabel} column={column} />
+      <SortableHeader label={displayLabel} column={column} sortCount={table.getState().sorting.length} />
       {isBlockAxis ? (
         <BlockTimeFilterControl table={table} label={displayLabel} />
       ) : (
@@ -151,35 +151,50 @@ const transferColumns: ColumnDef<EthRecord>[] = [
   helper.accessor('block_timestamp', {
     header: header('transfers', 'block_timestamp'),
     cell: (info) => <TimeCell value={info.getValue()} />,
+    sortDescFirst: descFirst('block_timestamp'),
   }),
   helper.accessor('block_number', {
     header: header('transfers', 'block_number'),
     cell: (info) => <NumberCell value={info.getValue()} />,
+    // Without this, TanStack's own auto-heuristic (getAutoSortDir: numeric values sort desc
+    // first, string values asc first) overrides the "positions ascend first" intent below —
+    // block_number's value is a JS number, so it would silently default to desc-first despite
+    // not being in DESC_FIRST_FIELDS. Every accessor below now sets this explicitly for the
+    // same reason (not just the ones that happen to be numbers): DESC_FIRST_FIELDS is the
+    // single authority for first-click direction, on every tab, and no column is left for
+    // the heuristic to guess at. Matches the 'all' tab, which already did this for every
+    // field via the same descFirst() helper.
+    sortDescFirst: descFirst('block_number'),
     filterFn: filterFor('block_number'),
   }),
   helper.accessor('transaction_hash', {
     header: header('transfers', 'transaction_hash'),
     cell: (info) => <TxHashCell value={info.getValue()} />,
+    sortDescFirst: descFirst('transaction_hash'),
     filterFn: filterFor('transaction_hash'),
   }),
   helper.accessor('event_type', {
     header: header('transfers', 'event_type'),
     cell: (info) => <BadgeCell label={info.getValue()} />,
+    sortDescFirst: descFirst('event_type'),
     filterFn: filterFor('event_type'),
   }),
   helper.accessor('address', {
     header: header('transfers', 'address'),
     cell: (info) => <AddressCell value={info.getValue()} />,
+    sortDescFirst: descFirst('address'),
     filterFn: filterFor('address'),
   }),
   helper.accessor('from_address', {
     header: header('transfers', 'from_address'),
     cell: (info) => <AddressCell value={info.getValue()} />,
+    sortDescFirst: descFirst('from_address'),
     filterFn: filterFor('from_address'),
   }),
   helper.accessor('to_address', {
     header: header('transfers', 'to_address'),
     cell: (info) => <AddressCell value={info.getValue()} />,
+    sortDescFirst: descFirst('to_address'),
     filterFn: filterFor('to_address'),
   }),
   helper.accessor('quantity', {
@@ -193,11 +208,13 @@ const transferColumns: ColumnDef<EthRecord>[] = [
     header: header('transfers', 'token_id'),
     cell: (info) => <BigNumCell value={info.getValue()} />,
     sortingFn: 'bignum',
+    sortDescFirst: descFirst('token_id'),
     filterFn: filterFor('token_id'),
   }),
   helper.accessor('event_index', {
     header: header('transfers', 'event_index'),
     cell: (info) => <NumberCell value={info.getValue()} />,
+    sortDescFirst: descFirst('event_index'),
     filterFn: filterFor('event_index'),
   }),
 ] as ColumnDef<EthRecord>[]
@@ -208,30 +225,37 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
   helper.accessor('block_timestamp', {
     header: header('transactions', 'block_timestamp'),
     cell: (info) => <TimeCell value={info.getValue()} />,
+    sortDescFirst: descFirst('block_timestamp'),
   }),
   helper.accessor('block_number', {
     header: header('transactions', 'block_number'),
     cell: (info) => <NumberCell value={info.getValue()} />,
+    // See the same field in transferColumns above for why this is needed.
+    sortDescFirst: descFirst('block_number'),
     filterFn: filterFor('block_number'),
   }),
   helper.accessor('transaction_index', {
     header: header('transactions', 'transaction_index'),
     cell: (info) => <NumberCell value={info.getValue()} />,
+    sortDescFirst: descFirst('transaction_index'),
     filterFn: filterFor('transaction_index'),
   }),
   helper.accessor('transaction_hash', {
     header: header('transactions', 'transaction_hash'),
     cell: (info) => <TxHashCell value={info.getValue()} />,
+    sortDescFirst: descFirst('transaction_hash'),
     filterFn: filterFor('transaction_hash'),
   }),
   helper.accessor('from_address_tx', {
     header: header('transactions', 'from_address_tx'),
     cell: (info) => <AddressCell value={info.getValue()} />,
+    sortDescFirst: descFirst('from_address_tx'),
     filterFn: filterFor('from_address_tx'),
   }),
   helper.accessor('to_address_tx', {
     header: header('transactions', 'to_address_tx'),
     cell: (info) => <AddressCell value={info.getValue()} />,
+    sortDescFirst: descFirst('to_address_tx'),
     filterFn: filterFor('to_address_tx'),
   }),
   helper.accessor('value_lossless_tx', {
@@ -267,11 +291,13 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
   helper.accessor('nonce_tx', {
     header: header('transactions', 'nonce_tx'),
     cell: (info) => <NumberCell value={info.getValue()} />,
+    sortDescFirst: descFirst('nonce_tx'),
     filterFn: filterFor('nonce_tx'),
   }),
   helper.accessor('type_tx', {
     header: header('transactions', 'type_tx'),
     cell: (info) => <BadgeCell label={txTypeLabel(info.getValue())} />,
+    sortDescFirst: descFirst('type_tx'),
     filterFn: filterFor('type_tx'),
   }),
 ] as ColumnDef<EthRecord>[]

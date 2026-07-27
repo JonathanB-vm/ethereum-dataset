@@ -138,7 +138,13 @@ function headerLabel(tab: Parameters<typeof getColumnsForTab>[0], field: keyof E
   if (!def || typeof def.header !== 'function') {
     throw new Error(`no function header for ${String(field)} on tab ${tab}`)
   }
-  const el = def.header({ column: {} as Column<EthRecord, unknown> } as never) as ReactElement
+  // Task 7's header() now also reads `table.getState().sorting.length` (for SortableHeader's
+  // `sortCount` prop) directly in the render function body, not deferred until SortableHeader
+  // itself renders — so the stub context needs a minimal `table` alongside the stub `column`.
+  const el = def.header({
+    column: {} as Column<EthRecord, unknown>,
+    table: { getState: () => ({ sorting: [] }) } as never,
+  } as never) as ReactElement
   const children = (el.props as { children: ReactElement[] }).children
   return (children[1].props as { label: string }).label
 }

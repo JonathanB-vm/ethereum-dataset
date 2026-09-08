@@ -68,6 +68,7 @@ REST, JSON, versioned under `/v1`. All hex fields are `0x`-prefixed lowercase st
 | `GET /v1/export.csv?…` | synchronous streaming export, ≤ 100,000 rows |
 | `POST /v1/exports` → `GET /v1/exports/{id}` | async export ≤ 5 M rows, CSV or Parquet, result is a time-limited R2 link |
 | `GET /v1/dataset/manifest` | the Parquet manifest for the downloads page |
+| (M2 option) read-only SQL endpoint | a ClickHouse user with CryptoHouse-style limits (`max_execution_time 60`, `max_result_rows 1000`, 60 queries/hour) for researchers who want raw SQL |
 
 ### Pagination
 
@@ -79,8 +80,10 @@ and the cursor then carries `(sort value, key)`.
 
 ### Limits and safety
 
-- `limit` ≤ 1000 for anonymous, ≤ 10,000 with an API key. Rate limit 60 req/min anonymous,
-  600 with a key.
+- `limit` ≤ 1000 for anonymous, ≤ 10,000 with an API key (Etherscan's free/paid split and
+  CryptoHouse's 1,000-row cap are the same brackets). Rate limit 300 req/min per IP
+  anonymous (Blockscout's default), 600 with a key; responses carry `x-ratelimit-limit`
+  and `x-ratelimit-remaining`. Async exports: 10 jobs per hour per key.
 - ClickHouse per-query settings from the API user: `max_execution_time = 30`,
   `max_rows_to_read` sized to a 100,000-block range, `max_memory_usage` 4 GB.
 - Unbounded requests return 400 with a message naming the required scope.

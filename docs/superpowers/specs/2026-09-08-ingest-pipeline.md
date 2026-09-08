@@ -8,9 +8,13 @@ Query draft: `sql/export_block_range.sql`
 ## Principles
 
 1. **Never scan a source table without a partition filter.** The source tables are
-   partitioned by `block_timestamp`. Every query carries a `block_timestamp BETWEEN …`
-   clause derived from the block range, in addition to the `block_number` range. This is
-   the difference between cents and tens of dollars per run.
+   partitioned **by month** on `block_timestamp` (official schema page; see the industry
+   comparison doc). Every query carries a `block_timestamp BETWEEN …` clause derived from
+   the block range, in addition to the `block_number` range. Because the partition is
+   monthly, one query touches at least one whole month of the selected columns, so
+   **the backfill exports one month per query**, not one chunk per query, and the daily
+   job re-reads the current month. This is the difference between under a dollar and
+   tens of dollars per run.
 2. **Only finalized blocks.** The job targets `head − 100`. Post-merge finality is ~13
    minutes (64 slots); 100 blocks is ~20 minutes, so reorgs never reach us and there is no
    reorg-handling code.
@@ -27,17 +31,22 @@ Query draft: `sql/export_block_range.sql`
 1. head        = MAX(block_number) in bigquery-public-data.…blocks      (tiny query)
 2. target_end  = floor((head − 100) / 10000) × 10000 − 1                  (last complete chunk)
 3. last_done   = highest chunk with status = done in ingest_log
-4. for chunk in (last_done + 1 … target_end) step 10000:
-     a. EXPORT DATA (transactions, token_transfers, blocks) → gs://staging/<chunk>/*.parquet
-        (three statements from sql/export_block_range.sql with the chunk's range)
-     b. repack: DuckDB reads the shards, sorts by the table's sort key,
-        writes one file per table with 100k-row groups and zstd → local tmp
+4. for month in months covering (last_done + 1 … target_end):
+     a. EXPORT DATA (transactions, token_transfers, blocks) for the month's block range
+        → gs://staging/<month>/*.parquet (three statements from
+        sql/export_block_range.sql; one scan of the month partition per table)
+     then for each 10,000-block chunk inside that export:
+     b. repack: DuckDB reads the month's shards for the chunk's range, sorts by the
+        table's sort key, writes one file per table with ~250k-row groups (transactions)
+        / ~500k (transfers), zstd, hex-string encoding for hashes and addresses → local tmp
      c. sha256 each file; upload to r2://eth-dataset/v1/<table>/year=/month=/blocks_a_b.parquet
-     d. ClickHouse: INSERT INTO <table> SELECT … FROM s3('r2 url', 'Parquet')  (three tables)
+     d. ClickHouse: INSERT INTO <table> SELECT … FROM s3('r2 url', 'Parquet')  (three tables;
+        `input_format_parquet_import_nested = 1`, hex → FixedString via unhex(), STRING
+        numerics (`quantity`, `token_id`, `value_lossless`) → UInt256, `v`/`y_parity` hex → int)
      e. verify: row counts in ClickHouse for the range == Parquet row counts
      f. ingest_log: chunk → done (row counts, sha256s, timings)
      g. delete gs://staging/<chunk>
-5. rewrite manifest.json from ingest_log (written last, atomically)
+5. rewrite manifest.json and checksums.txt from ingest_log (written last, atomically)
 6. refresh column_stats (nightly only)
 ```
 
@@ -69,15 +78,23 @@ into ClickHouse but not logged is harmless: `ReplacingMergeTree` deduplicates th
 
 BigQuery on-demand pricing: $6.25 per TB scanned, first 1 TB per month free.
 
+Source table sizes reported by a third party (unverified): transactions 4.08 TB,
+token_transfers 1.60 TB, i.e. roughly 40–60 GB per recent month for the two tables we read.
+Partitions are monthly, and clustering on `block_timestamp` may prune further inside a
+month; the dry run reports the actual figure.
+
 | Run | Scanned | Cost |
 |---|---|---|
-| Daily, partition-pruned (one chunk) | ~3–5 GB | < $0.05 |
-| One-year backfill, partition-pruned | ~1–2 TB | ~$0–10 |
-| Five-year backfill | ~5–8 TB | ~$30–50 |
-| Any run without the `block_timestamp` filter | full tables, ~4–6 TB | ~$30–40 **per run** |
+| Daily, partition-pruned (re-reads the current month, both tables) | ~40–100 GB | ~$0.25–0.60 (≈ $10–20 / month; zero while inside the free 1 TiB) |
+| One-year backfill, one query per month | ~0.6–1.2 TB | ~$0–8 |
+| Five-year backfill | ~3–6 TB | ~$20–40 |
+| Any run without the `block_timestamp` filter | full tables, ~5.7 TB | ~$35 **per run** |
+
+If the daily cost matters, run the job weekly instead: same freshness class for a
+research dataset, one-seventh of the scans.
 
 Guard: the job reads the dry-run estimate (`job_config.dry_run = True`) before every export
-and aborts if `total_bytes_processed` exceeds a per-chunk ceiling (default 20 GB). This turns
+and aborts if `total_bytes_processed` exceeds a per-query ceiling (default 200 GB). This turns
 a missing partition filter into a failed run instead of a surprise invoice.
 
 GCS staging: pennies (short-lived). R2 class-A writes: negligible at ~3 files per chunk.

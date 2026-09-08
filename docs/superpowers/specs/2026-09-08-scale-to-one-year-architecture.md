@@ -114,23 +114,27 @@ One server then serves dozens of researchers because the heavy work never touche
 
 Recommended for M1 (one year): one dedicated server + R2 + Cloudflare CDN.
 
+Prices verified 2026-09-08 (details and sources in the industry comparison doc).
+
 | Component | One year | Five years |
 |---|---|---|
-| Dedicated server, 8–16 cores, 64–128 GB RAM, NVMe (Hetzner AX-class or an institutional server) | 1–2 TB NVMe, $60–120 / month | 3–4 TB NVMe, $150–250 / month |
-| R2 storage ($0.015 / GB-month) | ~250 GB → ~$4 | ~1 TB → ~$15 |
-| R2 egress | $0 | $0 |
+| Dedicated server (Hetzner AX52: Ryzen 7 7700, 64 GB, 2×1 TB NVMe ≈ €64 / month; AX102: 128 GB, 2×1.92 TB NVMe, quoted €122–259 / month, verify) or an institutional server | ~$70–130 / month | ~$150–280 / month, needs ≥ 3 TB NVMe |
+| R2 storage ($0.015 / GB-month, egress $0) | ~250 GB → ~$4 | ~1 TB → ~$15 |
 | Cloudflare CDN (free tier) | $0 | $0 |
-| BigQuery daily ingest (partition-pruned) | cents / day | cents / day |
-| **Total** | **~$70–130 / month** | **~$170–270 / month** |
+| BigQuery ingest (monthly partitions; the daily job re-reads the current month) | ~$10–20 / month, or ~$2 if run weekly | same |
+| **Total** | **~$85–155 / month** | **~$170–315 / month** |
 
-Alternative with less operations: ClickHouse Cloud instead of the server, roughly
-$150–300 / month for one year and $300–500 for five. An institutional server with NVMe
-drops the compute line to zero.
+Alternative with less operations: ClickHouse Cloud. The Basic tier (~$186 / month 24×7,
+fixed 8 GB RAM / 2 vCPU) is **capped at 1 TB of storage and cannot scale**, so it fits one
+year only just and five years not at all; the Scale tier starts around $499 / month plus
+$25.30 / TB-month storage and $0.1152 / GB internet egress (exports out of ClickHouse Cloud
+are billed). An institutional server with NVMe drops the compute line to zero.
 
-One-time BigQuery backfill: ~1–2 TB scanned for one year (~$0–10 after the free 1 TB /
-month), ~5–8 TB for five years (~$30–50). The only budget hazard is a query without a
-partition filter: a full scan of the source tables is ~$30–40 per run, i.e. ~$1,000 / month
-for a daily job. The ingest spec makes the partition filter mandatory.
+One-time BigQuery backfill: ~0.6–1.2 TB scanned for one year (~$0–8 after the free
+1 TiB / month), ~3–6 TB for five years (~$20–40). The only budget hazard is a query without
+a partition filter: a full scan of the two source tables is ~5.7 TB, ~$35 per run, i.e.
+~$1,000 / month for a daily job. The ingest spec makes the partition filter mandatory and
+adds a dry-run byte ceiling.
 
 ## Performance targets
 
@@ -170,6 +174,17 @@ loads straight from the bucket.
 Serve researchers: Parquet by month and table, sorted, row groups aligned to block ranges;
 manifest + checksums + schema version; zero-egress hosting; a Hugging Face Datasets mirror
 for a DOI and free public hosting.
+
+## Industry precedent
+
+A survey of how BigQuery, ClickHouse's own Ethereum example, CryptoHouse, Dune,
+Blockscout, Etherscan, Otterscan, AWS Public Blockchain Data, cryo, Sourcify and the
+Ethereum Foundation's era1 archives handle the same problems, and a line-by-line
+comparison with these specs, is in `2026-09-08-industry-practice-comparison.md`. The
+short version: the architecture matches what the field converged on (columnar store,
+`ReplacingMergeTree`, keyset pagination, Parquet in a bucket, address-keyed side
+structures), and this design is ahead of practice on checksums, immutable caching and
+lossless 256-bit values.
 
 ## Risks and open questions
 

@@ -51,20 +51,33 @@ them from the canonical Parquet and note it in the data dictionary.
 r2://eth-dataset/v1/
   manifest.json
   schema/transactions.json, token_transfers.json, blocks.json
-  transactions/year=2026/month=07/blocks_25500000_25509999.parquet
-  token_transfers/year=2026/month=07/blocks_25500000_25509999.parquet
-  blocks/year=2026/month=07/blocks_25500000_25509999.parquet
+  checksums.txt
+  transactions/year=2026/month=07/ethereum__transactions__25500000_to_25509999.parquet
+  token_transfers/year=2026/month=07/ethereum__token_transfers__25500000_to_25509999.parquet
+  blocks/year=2026/month=07/ethereum__blocks__25500000_to_25509999.parquet
 ```
+
+File names follow cryo's convention (`{network}__{table}__{first}_to_{last}`, 8-digit
+zero-padded block numbers) so listings sort lexically and cryo users feel at home.
 
 - **File = 10,000 blocks** (~33 hours), roughly 1 GB for transactions, 0.4 GB for transfers.
   A file never straddles a month boundary; the last file of a month is shorter.
-- **Sorted by the table's sort key**, row groups of ~100,000 rows, zstd compression, Parquet
-  column statistics on. Sorting is what lets DuckDB over HTTP skip row groups by block.
+- **Sorted by the table's sort key**, row groups of ~250,000 rows (transactions) and
+  ~500,000 (transfers), zstd compression, Parquet column statistics on. Sorting is what
+  lets DuckDB over HTTP skip row groups by block; larger row groups keep the number of
+  HTTP range requests down (DuckDB guidance: 250k–500k rows per row group).
+- **Hashes and addresses are `0x`-prefixed lowercase hex strings** in the published
+  files, matching BigQuery, AWS Public Blockchain Data and researchers' pandas habits.
+  Binary storage is internal to ClickHouse only. (cryo is the one tool that publishes
+  binary; the cost of hex after zstd is small.)
 - **256-bit values** are written as Parquet `DECIMAL(76,0)` (fixed 32-byte binary). DuckDB
-  and pyarrow read it as a decimal; document a one-line cast for pandas users.
+  and pyarrow read it as a decimal; document a one-line cast for pandas users. A lossy
+  float column is never written (AWS's public dataset stores `value` as a double; we do not).
 - **Manifest** (`manifest.json`): schema version, dataset release tag, head block, and per
   file: table, path, block range, row count, bytes, sha256, created-at. The manifest is
-  written last, so a partially uploaded chunk is never visible.
+  written last, so a partially uploaded chunk is never visible. A plain `checksums.txt`
+  (`sha256  path` lines, the format `sha256sum -c` and the Ethereum Foundation's era1
+  hosts use) sits next to it.
 - **Releases**: a dated tag (`2026.09`) is a frozen manifest. Files are immutable once
   listed; corrections ship as a new release, never as an overwrite. R2 object versioning on.
 - Optional mirrors: Hugging Face Datasets (free public hosting, DOI); Zenodo for a yearly
@@ -74,7 +87,13 @@ r2://eth-dataset/v1/
 
 Engine `ReplacingMergeTree` on every fact table: a re-inserted chunk deduplicates on merge,
 so a retried load can never double-count. The ingest log (see the ingest spec) is the
-primary guard; the engine is defense in depth.
+primary guard; the engine is defense in depth. This is also what CryptoHouse and Goldsky's
+ClickHouse sink use.
+
+Source-type casts at load time (the BigQuery columns are STRING for these): `quantity`,
+`token_id`, `value_lossless` → `UInt256` via `toUInt256`; `v`, `y_parity` (hex strings such
+as `0x1`) → `UInt64` / `UInt8` via `reinterpretAsUInt64(reverse(unhex(...)))` or a
+`toUInt64OrNull` on the decoded value; `transaction_type` is already an integer.
 
 ```sql
 CREATE TABLE transactions
@@ -154,9 +173,14 @@ Parquet layout one-to-one, so "reload July" is one `DROP PARTITION` plus one `IN
 
 ### Address index tables (the address lookup problem)
 
-Bloom filters answer "address = X" in 0.5–5 s over a year because they only skip granules.
-A small secondary table sorted by address answers it in milliseconds and costs ~30 bytes
-per row instead of a full projection copy:
+Bloom filters answer "address = X" in 0.5–5 s over a year because they only skip granules
+and, per the ClickHouse docs, work best when the column correlates with the primary key
+(addresses do not). A small secondary table sorted by address answers it in milliseconds
+and costs ~30 bytes per row instead of a full projection copy. Projections were rejected
+for a documented reason: they are not supported together with `FINAL` or lightweight
+deletes, both of which `ReplacingMergeTree` relies on. Google's own dataset ships the same
+idea as full table copies (`transactions_by_from_address`, `transactions_by_to_address`);
+Dune's docs quantify the problem (hash lookup 6 min without a block filter, 13 s with).
 
 ```sql
 CREATE TABLE tx_by_address

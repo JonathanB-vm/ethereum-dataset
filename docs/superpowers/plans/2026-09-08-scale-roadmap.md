@@ -16,6 +16,8 @@ with automatic daily refresh from BigQuery.
 - [ ] Decide: signature columns (`r`, `s`, `v`, `y_parity`) kept or dropped.
 - [ ] Decide: hosting (dedicated server vs. ClickHouse Cloud vs. institutional server).
 - [ ] Decide: API language (TypeScript recommended).
+- [ ] Decide: 10,000 blocks per Parquet file (spec) vs 8,192 (era1 convention) vs 1,000 (cryo default).
+- [ ] Decide: hex strings (spec, matches BigQuery/AWS) vs binary (cryo) in the published Parquet.
 - [ ] Create the R2 bucket (versioning on) and the GCS staging bucket; provision credentials.
 
 ## M1 — One year, end to end (weeks)
@@ -52,6 +54,7 @@ run unattended for a week.
 - [ ] First tagged release (`2026.xx`) with citation text; Hugging Face Datasets mirror; DOI.
 - [ ] `docker-compose` "researcher VM": ClickHouse + a loader that pulls chosen months from R2.
 - [ ] Usage docs: data dictionary, known caveats (`removed` flag, contract-creation `to_address`), examples.
+- [ ] Decide: offer a read-only SQL endpoint with CryptoHouse-style limits.
 
 ## M3 — Five years (days of compute, little new code)
 

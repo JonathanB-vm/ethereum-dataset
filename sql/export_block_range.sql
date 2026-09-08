@@ -5,12 +5,16 @@
 -- Before first use:
 --   1. Verify column names against the table schema (the console's "Schema" tab):
 --      transactions.transaction_type vs. type, access_list, value_lossless, etc.
---   2. Verify the partition column in the "Details" tab. These tables are
---      partitioned by block_timestamp — filtering on it is what keeps a run at
---      cents instead of a full-table scan (tens of dollars per run).
+--   2. The tables are partitioned MONTHLY on block_timestamp (official schema page).
+--      Filtering on it is what avoids a full-table scan (~$35 per run). Because the
+--      partition is a month, run one export per calendar month for backfills and
+--      split into 10,000-block chunks afterwards (see the ingest spec).
 --   3. Replace the bucket name.
 --
 -- Cost check: the console shows "This query will process N GB" before you run it.
+-- Column names below were confirmed against a metadata dump of the dataset
+-- (transaction_type, value_lossless STRING, access_list RECORD{address, storage_keys},
+-- r/s/v/y_parity STRING, token_transfers.quantity/token_id STRING).
 
 DECLARE first_block INT64 DEFAULT 25534200;
 DECLARE last_block  INT64 DEFAULT 25534299;

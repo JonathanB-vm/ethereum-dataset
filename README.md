@@ -72,6 +72,15 @@ src/App.tsx                            ← load state, tabs, theme, panels
 touching any component. Everything downstream (stats, tab counts, block badge, dictionary
 stats) is derived from the loaded records at runtime, never hard-coded.
 
+## Roadmap: one year of blocks
+
+The next milestone replaces the single-block CSV with one year of mainnet data (~2 B rows)
+served through an API and downloadable Parquet. The design lives in
+`docs/superpowers/specs/2026-09-08-*.md` (architecture, data model, ingest pipeline,
+API + explorer changes) and `docs/superpowers/plans/2026-09-08-scale-roadmap.md`.
+Supporting files: `sql/export_block_range.sql` (draft BigQuery → Parquet export) and
+`scripts/measure-csv.mjs` (streaming sizing of any export CSV).
+
 ## Testing
 
 `npm test` runs unit tests across 11 Vitest suites covering the dictionary, CSV parsing

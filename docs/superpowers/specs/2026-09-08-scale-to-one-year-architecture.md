@@ -1,0 +1,186 @@
+# Scaling the explorer to one year of blocks — architecture
+
+Date: 2026-09-08
+Status: draft, pending user approval
+Companion specs: `2026-09-08-data-model.md`, `2026-09-08-ingest-pipeline.md`,
+`2026-09-08-api-and-frontend.md`. Roadmap: `docs/superpowers/plans/2026-09-08-scale-roadmap.md`.
+
+## Problem
+
+The explorer today is a browser-only SPA that fetches one CSV (`public/data/analytics_25534300.csv`,
+one block, 600 records, 6.5 MB) and sorts, filters, aggregates and exports entirely in the
+client. The research group wants:
+
+1. **Next milestone:** one year of mainnet blocks (~2.63 M blocks at 12 s per block).
+2. **Later:** the last five years (~10–13 M blocks), everything the source dataset carries.
+3. A product researchers can use and pass around: browse, query, download, and eventually an API.
+
+The client-side model stops working at roughly 50,000 rows. One year is ~2 billion rows.
+Nothing in the current data path survives the jump, while the UI layer largely does.
+
+## Sizing (measured, then extrapolated)
+
+Measured on the single block in the repo (re-measure on the 100-block file with
+`node scripts/measure-csv.mjs <file>` before buying hardware; the figures below assume the
+single block is representative).
+
+| Per block | Value |
+|---|---|
+| Records in the current flat join | 600 (504 transfers + 96 plain transactions) |
+| Unique transactions | 256 |
+| Flat CSV size | 6.5 MB (78% of bytes are `input_tx`, 94% of those are duplicates of the same tx) |
+| Normalized (transactions + transfers), uncompressed | 0.64 MB |
+| Normalized, gzip | 0.15 MB |
+| Normalized, Parquet + zstd (estimate) | ~0.10 MB |
+
+| Extrapolated | One year (2.63 M blocks) | Five years (10–13 M blocks) |
+|---|---|---|
+| Transactions | ~670 M rows | ~2.5–3.3 B rows |
+| Token transfers | ~1.3 B rows | ~5–6.5 B rows |
+| Flat CSV, uncompressed | ~17 TB | ~70 TB |
+| Normalized Parquet + zstd | ~250 GB | ~1–1.3 TB |
+| ClickHouse on disk (incl. indexes, MVs) | ~350 GB | ~1.5 TB |
+
+Two conclusions drive the design: normalization alone is a 4× saving even after
+compression, and a year fits on one NVMe disk. This is mid-sized data: too big for a
+browser or vanilla Postgres, comfortably small for one columnar database server.
+
+## Goals and non-goals
+
+Goals:
+- Serve interactive browsing (page of 50 rows, filters, sort) in well under one second.
+- Serve lookups by block, block range, time range, transaction hash and address.
+- Publish the dataset as downloadable, citable, versioned Parquet.
+- Refresh automatically and cheaply from BigQuery.
+- Keep total monthly cost in the low hundreds of dollars or less.
+
+Non-goals (this phase):
+- Real-time (sub-minute) freshness. Daily is fine; hourly is possible.
+- Arbitrary SQL from the public. Heavy analysis runs on the researcher's machine over Parquet.
+- Decoding contract calls / event ABIs beyond what the source dataset carries.
+
+## Architecture
+
+```
+BigQuery public dataset (Google runs this compute)
+        │  daily job: EXPORT DATA … PARQUET for finalized block ranges
+        ▼
+GCS staging bucket (raw export shards, short retention)
+        │  repack: sort by block, fixed row groups, checksum, manifest
+        ▼
+R2 bucket  ── canonical Parquet, partitioned by month/table ── downloads, DuckDB-over-HTTP
+        │  ClickHouse INSERT … SELECT FROM s3()
+        ▼
+ClickHouse (one server) ── sorted tables, skip indexes, address index tables, stats MVs
+        │
+API (cursor pagination, caps, immutable caching) ──▶ CDN ──▶ React explorer (existing UI)
+```
+
+**Two storage layers, with a clear source of truth.**
+
+- **Cold / canonical: Parquet in object storage.** This is the dataset. Partitioned by
+  month and table, sorted by block, fixed row-group size, with a manifest (block range, row
+  count, bytes, sha256 per file) and a schema version. Everything else can be rebuilt
+  from it. Cloudflare R2 is preferred over GCS/S3 because egress is free: a researcher
+  pulling 250 GB costs $0 on R2 and ~$30 on GCS.
+- **Hot / derived: ClickHouse.** Columnar, compresses internally, handles billions of rows
+  on one machine, and the ClickHouse docs contain a worked "Ethereum blockchain data"
+  example that follows exactly this BigQuery → Parquet → ClickHouse path. Because it is
+  derived, it needs no backups: a rebuild is a re-load from R2.
+
+**Rejected alternatives.**
+- Postgres / TimescaleDB: 2 B rows with address indexes is painful and slow to load.
+- BigQuery as the live backend: seconds per query, billed per scan, unusable behind a UI.
+- DuckDB as the server: excellent for one user over Parquet, not a multi-user server.
+- Keeping the flat 35-column join as the storage format: 10× the bytes, unparseable
+  `access_list_tx` (numpy repr with embedded newlines), duplicated `input_tx`.
+
+## Who provides the compute
+
+| Usage mode | Compute runs on | Who pays |
+|---|---|---|
+| Browsing in the explorer (pages, filters, stats) | Our ClickHouse server | Us (the server line below) |
+| Public API | Our server, behind rate limits and row caps | Us |
+| Download Parquet, analyze in DuckDB / pandas | Researcher's machine | Us: storage only (egress free on R2) |
+| DuckDB querying Parquet remotely over HTTP | Researcher's machine | Us: bandwidth only |
+| Daily ingest from BigQuery | Google | Us: per TB scanned |
+| "VM for researchers" | Either a docker-compose they run (they pay) or a hosted notebook (we pay) | Depends |
+
+Rule: we provide compute for interactive browsing only, with hard limits (row cap,
+query timeout, rate limit). Heavy research runs on the researcher's hardware over Parquet.
+One server then serves dozens of researchers because the heavy work never touches it.
+
+## Hosting and cost
+
+Recommended for M1 (one year): one dedicated server + R2 + Cloudflare CDN.
+
+| Component | One year | Five years |
+|---|---|---|
+| Dedicated server, 8–16 cores, 64–128 GB RAM, NVMe (Hetzner AX-class or an institutional server) | 1–2 TB NVMe, $60–120 / month | 3–4 TB NVMe, $150–250 / month |
+| R2 storage ($0.015 / GB-month) | ~250 GB → ~$4 | ~1 TB → ~$15 |
+| R2 egress | $0 | $0 |
+| Cloudflare CDN (free tier) | $0 | $0 |
+| BigQuery daily ingest (partition-pruned) | cents / day | cents / day |
+| **Total** | **~$70–130 / month** | **~$170–270 / month** |
+
+Alternative with less operations: ClickHouse Cloud instead of the server, roughly
+$150–300 / month for one year and $300–500 for five. An institutional server with NVMe
+drops the compute line to zero.
+
+One-time BigQuery backfill: ~1–2 TB scanned for one year (~$0–10 after the free 1 TB /
+month), ~5–8 TB for five years (~$30–50). The only budget hazard is a query without a
+partition filter: a full scan of the source tables is ~$30–40 per run, i.e. ~$1,000 / month
+for a daily job. The ingest spec makes the partition filter mandatory.
+
+## Performance targets
+
+Measured at the API, one year of data, single server, p95:
+
+| Query | Target | Mechanism |
+|---|---|---|
+| Block / block range / time range page | < 100 ms | primary sort key |
+| Page of 50 rows with sort + filters within a block range | < 200 ms | sort key + skip indexes |
+| Transaction by hash | < 50 ms | hash lookup table |
+| Address → transactions / transfers page | < 200 ms | address index tables |
+| Stats for a block range or day range | < 100 ms | materialized aggregates |
+| Ad-hoc aggregation over a full year | 10–60 s | acceptable for API-key users only, capped |
+| Synchronous CSV export | ≤ 100k rows, streaming | server-side |
+| Asynchronous export | ≤ 5 M rows, link to R2 | job queue |
+
+Download times are bandwidth-bound: one month of transfers (~10 GB) is ~15 min at
+100 Mbps; a full year (~250 GB) is ~5.5 h at 100 Mbps or ~35 min at 1 Gbps. A remote
+DuckDB query over R2 that touches one contract for one month reads 50–500 MB.
+
+## Techniques used, by effect
+
+Shrink the data: normalize (store `input` once per tx); store addresses and hashes as
+bytes, not hex strings; per-column codecs (Delta+ZSTD on block numbers and timestamps,
+LowCardinality on enums); drop `value_tx` (duplicate of `value_lossless_tx`); confirm with
+researchers whether the ECDSA signature columns (~43 GB / year, incompressible) are needed.
+
+Speed up lookups: sort key = access pattern `(block_number, transaction_index, …)`; bloom
+filters on hashes and addresses, minmax on timestamps; small address index tables fed by
+materialized views; block-level stats materialized at ingest; keyset (cursor) pagination,
+never OFFSET; `Cache-Control: immutable` on any response whose block range is finalized.
+
+Cheapen the pipeline: partition-pruned BigQuery queries; ingest only blocks ≥ 100 behind
+head (finality, so no reorg handling); idempotent chunk loads with an ingest log; ClickHouse
+loads straight from the bucket.
+
+Serve researchers: Parquet by month and table, sorted, row groups aligned to block ranges;
+manifest + checksums + schema version; zero-egress hosting; a Hugging Face Datasets mirror
+for a DOI and free public hosting.
+
+## Risks and open questions
+
+- **Estimates rest on one block.** Re-measure on the 100-block file; block-to-block variance
+  in `input` size and transfer counts is large.
+- **Source dataset column names** in `sql/export_block_range.sql` were written from memory;
+  verify against the BigQuery schema tab before the first run.
+- **Source freshness.** The public dataset is refreshed by Google; if it lags, our head lags.
+  The ingest job must tolerate "nothing new" runs.
+- **Single server.** ClickHouse is rebuildable from R2, so the failure mode is downtime, not
+  data loss. Enable R2 object versioning to protect the canonical layer.
+- **Signature columns**: keep or drop (decision needed from the research group).
+- **Language split**: TypeScript API (shares types with the React app) vs. Python (matches
+  the BigQuery/DuckDB tooling of the ingest job). Recommendation in the API spec.

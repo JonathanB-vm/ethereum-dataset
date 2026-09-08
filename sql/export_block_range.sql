@@ -67,3 +67,23 @@ FROM `bigquery-public-data.blockchain_analytics_ethereum_mainnet_us.token_transf
 WHERE block_timestamp BETWEEN ts_from AND ts_to
   AND block_number BETWEEN first_block AND last_block
 ORDER BY block_number, transaction_index, event_index, batch_index;
+
+-- 3. blocks (small; drives the `blocks` table, head discovery and the manifest)
+EXPORT DATA OPTIONS (
+  uri = 'gs://YOUR-BUCKET/parquet/blocks/blocks_25534200_25534299/*.parquet',
+  format = 'PARQUET',
+  compression = 'ZSTD',
+  overwrite = true
+) AS
+SELECT
+  block_number, block_timestamp, block_hash,
+  transaction_count
+FROM `bigquery-public-data.blockchain_analytics_ethereum_mainnet_us.blocks`
+WHERE block_timestamp BETWEEN ts_from AND ts_to
+  AND block_number BETWEEN first_block AND last_block
+ORDER BY block_number;
+
+-- Head discovery (run separately, tiny scan): the ingest job targets head − 100.
+-- SELECT MAX(block_number) AS head
+-- FROM `bigquery-public-data.blockchain_analytics_ethereum_mainnet_us.blocks`
+-- WHERE block_timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 2 DAY);

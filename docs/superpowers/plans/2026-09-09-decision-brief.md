@@ -177,8 +177,12 @@ orders of magnitude, which is worse than showing nothing.
 
 ## 4. Question for the institution
 
-**Is there a server with roughly 450 GB of NVMe (2 TB if we go to five years), 32–64 GB of
-RAM, and a persistent network connection?**
+**Is there a server with 1 TB of local NVMe (3 TB if we go to five years), 32–64 GB of RAM,
+and a persistent network connection?**
+
+A standalone version of this ask, written for whoever administers research infrastructure —
+including what to ask them, what to watch out for, and how to judge what they offer — is in
+[`2026-09-09-server-requirements.md`](2026-09-09-server-requirements.md).
 
 If yes, the project runs at **~$4/month**. If no, a rented dedicated server is
 **$70–130/month**. That single answer is 95% of the running cost.

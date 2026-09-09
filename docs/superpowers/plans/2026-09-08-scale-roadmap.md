@@ -23,7 +23,7 @@ with automatic daily refresh from BigQuery.
   - Q4 which block-level fields to add (`base_fee_per_gas`, `gas_used`, `miner`, `extra_data`, `withdrawals`): ~1 GB/year, cheap now, expensive to add later.
   - Q5 fixed calendar window vs trailing year, for citability.
   - Q6 token-decimals coverage: currently 46% of transfer rows.
-- [ ] Decide: hosting (dedicated server vs. ClickHouse Cloud vs. institutional server). Sizing input is settled by measurement: ~409 GB of ClickHouse disk for one year, ~1.6–2.1 TB for five, so ~450 GB of NVMe with merge headroom.
+- [ ] Decide: hosting (dedicated server vs. ClickHouse Cloud vs. institutional server). Sizing settled by measurement: 409 GB of ClickHouse disk for one year, ~1.6–2.1 TB for five. Provision **1 TB of local NVMe** for a year, 3 TB for five — the gap is merge headroom, not slack. Requirements written up for IT in [`2026-09-09-server-requirements.md`](2026-09-09-server-requirements.md).
 - [ ] Decide: API language (TypeScript recommended).
 - [ ] Decide: 10,000 blocks per Parquet file (spec) vs 8,192 (era1 convention) vs 1,000 (cryo default).
 - [x] Decide: hex strings (spec, matches BigQuery/AWS) vs binary (cryo) in the published Parquet. *(Resolved by measurement: hex costs 270 GB/year vs 252 GB for binary — a 6.7% premium, ~$0.27/month on R2. **Keep hex**; pandas/DuckDB convenience is worth far more than 18 GB.)*

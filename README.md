@@ -148,6 +148,10 @@ AWS Public Blockchain Data, era1) compared line by line with those specs is in
 Supporting files: `sql/export_block_range.sql` (draft BigQuery → Parquet export) and
 `scripts/measure-csv.mjs` (streaming sizing of any export CSV).
 
+**Costs, sizing and the open decisions are summarised in
+[`docs/superpowers/plans/2026-09-09-decision-brief.md`](docs/superpowers/plans/2026-09-09-decision-brief.md)**,
+written to be forwarded to the research group as-is.
+
 A working slice of that design already runs locally, with no cloud account:
 `pipeline/repack.py` turns the export into canonical Parquet, `pipeline/clickhouse/`
 holds the schema and load, and `api/` serves the paged read API over it. See

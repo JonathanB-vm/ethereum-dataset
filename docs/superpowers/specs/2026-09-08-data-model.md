@@ -272,6 +272,25 @@ The explorer's stats band and the dictionary's per-column stats (fill rate, dist
 counts, min/max) read from this table or from a nightly `column_stats` refresh, never from
 the fact tables.
 
+## Known gaps in the source
+
+Confirmed against the live schema on 2026-09-09. The three tables this model is built from
+carry no receipt-side data, which limits what the dataset can answer:
+
+| Absent | Consequence |
+|---|---|
+| `receipt_status` | A reverted transaction is indistinguishable from a successful one. It appears with its value, having moved nothing. |
+| `gas_used` | Only the sender's `gas` *limit* is available. Actual fees cannot be computed: fee = `gas_used × effective_gas_price`, and neither factor is present. `gas × gas_price` is an upper bound that is frequently far off. |
+| `effective_gas_price`, `cumulative_gas_used` | Post-EIP-1559 fee analysis is not possible from these tables alone. |
+| `contract_address` | A deployment shows `to_address` as null with no way to learn the address created. |
+| `logs` beyond token transfers | Only ERC-20/721/1155 transfer events are covered; any other event needs the `logs` table. |
+| `traces` | Internal transactions (value moved by contracts) are not represented at all. |
+
+None of this is a defect in the model — it is the scope of the three source tables. Closing
+any of it means adding a source to the ingest pipeline, which is bounded work but much
+cheaper to decide before a backfill than after. Raised as Q3 in
+`docs/superpowers/plans/2026-09-09-decision-brief.md`.
+
 ## Data dictionary
 
 `src/data/dictionary.ts` stays the single source of truth for field descriptions. It gains

@@ -16,7 +16,13 @@ with automatic daily refresh from BigQuery.
 - [x] Confirm the partition column. *(Done 2026-09-09: `block_timestamp` on all three tables, and it is also the sole clustering column — matching the third-party field report.)*
 - [x] Confirm how far a time filter prunes. *(Done 2026-09-09 by measurement, since BigQuery hides the DDL of a public dataset. `transactions`, 21 columns: one month = 86.51 GB, one day = 3.51 GB, a **24.6× reduction**. A day-sized filter does prune, contrary to the earlier assumption. Backfill still exports one month per query — 0.94 TiB/year, ~19% cheaper than day-sized queries — but the **daily job now reads only the new day, taking the recurring BigQuery bill to ~$0**.)*
 - [x] Dry-run the same probe for `token_transfers`. *(Done 2026-09-09: 39.72 GB per month, 46% of `transactions`. Both tables together are 126.2 GB a month and ~5.1 GB a day, so the daily job and the one-year backfill both sit inside BigQuery's free tier. **Recurring ingest cost is ~$0.**)*
-- [ ] **Decide: signature columns (`r`, `s`, `v`, `y_parity`) kept or dropped.** Measured at **76 GB/year, 28% of the footprint** — the largest storage lever in the project. Needs the research group.
+- [ ] **Research-group decisions — see [`2026-09-09-decision-brief.md`](2026-09-09-decision-brief.md), written to be forwarded as-is.**
+  - Q1 signature columns: 76 GB/year, 28% of the dataset.
+  - Q2 full calldata vs function selector in the live database: up to 75 GB/year.
+  - Q3 **transaction success/failure and real gas used — absent from the source tables entirely.** Not a cost question; decide before the backfill.
+  - Q4 which block-level fields to add (`base_fee_per_gas`, `gas_used`, `miner`, `extra_data`, `withdrawals`): ~1 GB/year, cheap now, expensive to add later.
+  - Q5 fixed calendar window vs trailing year, for citability.
+  - Q6 token-decimals coverage: currently 46% of transfer rows.
 - [ ] Decide: hosting (dedicated server vs. ClickHouse Cloud vs. institutional server). Sizing input is settled by measurement: ~409 GB of ClickHouse disk for one year, ~1.6–2.1 TB for five, so ~450 GB of NVMe with merge headroom.
 - [ ] Decide: API language (TypeScript recommended).
 - [ ] Decide: 10,000 blocks per Parquet file (spec) vs 8,192 (era1 convention) vs 1,000 (cryo default).

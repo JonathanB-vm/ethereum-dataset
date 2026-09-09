@@ -1,9 +1,18 @@
--- M0 verification: run these in the BigQuery console before the first real export.
+-- M0 verification for the BigQuery console.
 --
--- All three are free. Queries 1 and 2 read INFORMATION_SCHEMA, which is metadata and is
--- not billed as scanned bytes. Query 3 is checked with the console's dry-run estimate
--- rather than actually run. None of this needs a billing account -- the BigQuery sandbox
--- is enough.
+-- >>> PASTE ONE QUERY AT A TIME. Do not paste this whole file. <<<
+--
+-- Pasting all four makes it a multi-statement script, and BigQuery then (a) runs every
+-- statement, including query 3, which is meant to be read rather than run, and (b) stops
+-- showing the upfront "this query will process N GB" estimate, which is the single number
+-- query 3 exists to produce.
+--
+-- Workflow: open BigQuery -> Create query, paste query 1 (comments and all), Run, read the
+-- result. Then select-all, paste query 2 over it, and so on. Four passes.
+--
+-- All of this is free. Queries 1 and 2 read INFORMATION_SCHEMA, which is metadata and is
+-- not billed as scanned bytes. Query 3 is never run. Query 4 scans a couple of days of one
+-- small table. None of it needs a billing account -- the BigQuery sandbox is enough.
 --
 -- Goal: settle the two open M0 items, which are the last unknowns in the ingest cost.
 --   1. Do the column names in sql/export_block_range.sql match the live schema?

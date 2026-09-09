@@ -209,8 +209,7 @@ storage, so the failure mode is downtime, not data loss.
 
 - **Query latency at scale.** Everything so far ran on 100 blocks, which fits in memory.
   The performance targets need a real backfill before anyone should believe them.
-- **The `v`/`y_parity` string format.** They are STRING in the source; if they are hex
-  (`0x1b`) rather than decimal (`27`), the repack step currently parses them to NULL
-  *silently*. One query settles it and it is outstanding.
+- ~~The `v`/`y_parity` string format.~~ Resolved: DuckDB's cast parses `0x` prefixes
+  natively, so the repack step handles hex and decimal identically. Covered by tests.
 - **Behaviour at a billion rows**: bloom-filter selectivity, merge pressure, address-index
   size. All flagged as exit criteria for the first backfill.

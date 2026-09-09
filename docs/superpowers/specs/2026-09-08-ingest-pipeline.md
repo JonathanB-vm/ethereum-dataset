@@ -142,19 +142,23 @@ GCS staging: pennies (short-lived). R2 class-A writes: negligible at ~3 files pe
 ## Parsing the STRING-typed numeric columns
 
 The source types `v`, `y_parity`, `quantity`, `token_id` and `value_lossless` as STRING
-(verified 2026-09-09). Their *formatting* is still open, and it decides how the repack step
-parses them. This matters more than it looks: `try_cast('0x1' AS UBIGINT)` in DuckDB
-returns NULL rather than raising, so if `v` arrives as hex and the pipeline assumes
-decimal, every row silently loses its `v` and nothing fails.
+(verified 2026-09-09). Their formatting was flagged as a risk on the grounds that
+`try_cast('0x1b' AS UBIGINT)` would return NULL rather than raise, silently emptying `v`
+for every row if the values turned out to be hex.
 
-`pipeline/repack.py` currently parses `v` and `y_parity` as integers, which is correct for
-the CSV export in the repo (pandas had already numeric-ified them) but may not be for
-Parquet straight out of `EXPORT DATA`. `sql/verify_schema.sql` query 5 settles it in one
-cheap read. Until it is run, treat this as the open item most likely to cause silent data
-loss on the first real export.
+**That risk does not exist.** DuckDB's cast parses the `0x` prefix natively, so the same
+expression handles `27`, `0x1b`, `0X1C` and the CSV's `37.0` suffix alike. Verified and
+locked in by `pipeline/test_repack.py`, which covers decimal, lower- and upper-case hex,
+the float suffix, and empty/NULL input. The pipeline is correct whichever format the export
+produces, so this is no longer a blocker for the first real export.
 
-The 256-bit columns are unaffected: they stay decimal strings end to end and are never
-cast to a fixed-width type.
+Two things remain true and worth keeping in mind:
+
+- A malformed value still becomes NULL rather than an error. That is why the ingest job's
+  verification step compares row counts across BigQuery, Parquet and ClickHouse instead of
+  trusting the load to fail loudly.
+- The 256-bit columns are never cast to a fixed-width type at all: they stay decimal
+  strings end to end, so no precision question arises.
 
 ## Schema drift
 

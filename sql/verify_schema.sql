@@ -20,8 +20,8 @@
 --   2b. Partition GRANULARITY  OPEN -- the cost model assumes MONTHLY; confirm it.
 --   3. Scan cost           OPEN -- the last unknown in the ingest cost model.
 --   4. Coverage / head     DONE 2026-09-09 -- genesis to head, head ~2h behind live.
---   5. STRING number format OPEN -- decides how the repack step parses v and y_parity,
---                          and gets it wrong silently if assumed.
+--   5. STRING number format  optional -- repack handles hex and decimal alike; run it
+--                          only to document what the source emits.
 
 -- ---------------------------------------------------------------------------
 -- 1. Column names and types for the three tables we read.
@@ -160,9 +160,9 @@ WHERE block_timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 2 DAY);
 -- 5. What do the STRING-typed numeric columns actually look like? Run this.
 --
 --    v, y_parity, quantity, token_id and value_lossless are all STRING in the source.
---    How they are *formatted* decides how the pipeline parses them, and getting it wrong
---    fails silently: try_cast('0x1' AS UBIGINT) is NULL, not an error, so `v` would
---    quietly become empty for every row.
+--    Nice-to-have, no longer a blocker: DuckDB's cast parses the 0x prefix natively, so
+--    pipeline/repack.py handles hex and decimal identically (see pipeline/test_repack.py).
+--    Worth running anyway to document what the source actually emits.
 --
 --    Expect either hex ('0x1', '0x1b') or decimal ('1', '27'). value_lossless is expected
 --    to be a plain decimal string; quantity and token_id live on token_transfers and are

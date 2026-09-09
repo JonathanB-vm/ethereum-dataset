@@ -20,7 +20,7 @@ estimates against the live BigQuery dataset on 2026-09-09. Nothing here has been
 | Rows (transactions + transfers) | ~2.2 B | ~8.5–11 B |
 | **Published Parquet archive** | **270 GB** | ~1.0–1.4 TB |
 | **ClickHouse working disk** | **409 GB** | ~1.6–2.1 TB |
-| Buy this much NVMe (merge headroom) | ~450 GB | ~2 TB |
+| **Provision this much NVMe** (merge headroom) | **1 TB** | **3 TB** |
 
 For scale: the same year stored in the current flat CSV shape would be **~58 TB**.
 Normalizing is a ~200× reduction, and it is already implemented and verified.

@@ -33,10 +33,13 @@ served by the API for bounded block ranges. Nothing is lost: every source column
 | `is_token_transfer` | dropped | | implied by the table |
 
 Open decision: `r`, `s`, `v`, `y_parity` are ~64 random bytes per transaction that do not
-compress. At the measured rate of 406 transactions per block (~1.07 B per year) that is
-**~68 GB / year**, roughly a quarter of the annual Parquet footprint — an earlier estimate
-of ~43 GB assumed 256 transactions per block. Keep if the researchers need signature
-analysis; otherwise drop them from the canonical Parquet and note it in the data dictionary.
+compress. Measured from the Parquet column statistics: **76 GB / year**, **28% of the
+annual footprint** — the largest single storage lever in the project. (Earlier drafts said
+~43 GB from a 256-transactions-per-block assumption, then ~68 GB once the rate was
+corrected to 406; 76 GB is the measured figure.) A third option beyond keep-or-drop is to
+keep them in the canonical Parquet and exclude them from the ClickHouse tables, which costs
+nothing in the archive and takes 76 GB off the expensive NVMe. Raised as Q1 in
+`docs/superpowers/plans/2026-09-09-decision-brief.md`.
 
 ### Types
 

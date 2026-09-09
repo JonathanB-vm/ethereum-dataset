@@ -40,7 +40,12 @@ Anything marked *(unverified)* should be checked before it is relied on.
   has `transaction_type` (not `type`), `value BIGNUMERIC` plus `value_lossless STRING`,
   `access_list RECORD{address, storage_keys}`, and `r, s, v, y_parity` all `STRING`.
   `token_transfers.quantity` and `token_id` are `STRING`. `blocks` has `transaction_count`
-  and a `withdrawals RECORD`. Whether `access_list` is REPEATED is not in the dump *(unverified)*.
+  and a `withdrawals RECORD`. **Verified 2026-09-09 against the live INFORMATION_SCHEMA:**
+  every column above is confirmed, `access_list` is
+  `ARRAY<STRUCT<address STRING, storage_keys ARRAY<STRING>>>` (so REPEATED, and
+  `TO_JSON_STRING` is the right export), and `value` is `BIGNUMERIC` — which tops out at
+  76 digits and therefore cannot hold `uint256`'s 78, corroborating the decision to carry
+  256-bit values as decimal strings.
 - Google also ships **`transactions_by_from_address` and `transactions_by_to_address`**,
   full copies of `transactions` organised by address, and recommends "clustered
   materialized views" on address fields for address-filtered queries.

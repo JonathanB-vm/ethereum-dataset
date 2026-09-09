@@ -3,8 +3,8 @@
 -- console or with `bq query --use_legacy_sql=false < sql/export_block_range.sql`.
 --
 -- Before first use:
---   1. Verify column names against the table schema (the console's "Schema" tab):
---      transactions.transaction_type vs. type, access_list, value_lossless, etc.
+--   1. Column names: VERIFIED 2026-09-09 against INFORMATION_SCHEMA on the live dataset.
+--      All 42 columns selected below exist, with the expected types. No changes needed.
 --   2. The tables are partitioned MONTHLY on block_timestamp (official schema page).
 --      Filtering on it is what avoids a full-table scan (~$35 per run). Because the
 --      partition is a month, run one export per calendar month for backfills and
@@ -12,9 +12,16 @@
 --   3. Replace the bucket name.
 --
 -- Cost check: the console shows "This query will process N GB" before you run it.
--- Column names below were confirmed against a metadata dump of the dataset
--- (transaction_type, value_lossless STRING, access_list RECORD{address, storage_keys},
--- r/s/v/y_parity STRING, token_transfers.quantity/token_id STRING).
+--
+-- Live schema, confirmed 2026-09-09 (sql/verify_schema.sql query 1):
+--   transactions.transaction_type INT64  (not `type`)
+--   transactions.value            BIGNUMERIC  -- 76 digits max, cannot hold uint256's 78
+--   transactions.value_lossless   STRING      -- which is why this is the column we take
+--   transactions.access_list      ARRAY<STRUCT<address STRING, storage_keys ARRAY<STRING>>>
+--                                             -- REPEATED, so TO_JSON_STRING is correct
+--   transactions.r/s/v/y_parity   STRING      -- v and y_parity need parsing on load
+--   token_transfers.quantity/token_id STRING
+--   blocks.transaction_count      INT64
 
 DECLARE first_block INT64 DEFAULT 25534200;
 DECLARE last_block  INT64 DEFAULT 25534299;

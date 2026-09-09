@@ -2,21 +2,25 @@
 --
 -- >>> PASTE ONE QUERY AT A TIME. Do not paste this whole file. <<<
 --
--- Pasting all four makes it a multi-statement script, and BigQuery then (a) runs every
--- statement, including query 3, which is meant to be read rather than run, and (b) stops
--- showing the upfront "this query will process N GB" estimate, which is the single number
--- query 3 exists to produce.
+-- Pasting them together makes it a multi-statement script, and BigQuery then (a) runs
+-- every statement, including query 3, which is meant to be read rather than run, and
+-- (b) stops showing the upfront "this query will process N GB" estimate, which is the
+-- single number query 3 exists to produce.
 --
 -- Workflow: open BigQuery -> Create query, paste query 1 (comments and all), Run, read the
--- result. Then select-all, paste query 2 over it, and so on. Four passes.
+-- result. Then select-all, paste the next one over it. Five passes.
 --
 -- All of this is free. Queries 1 and 2 read INFORMATION_SCHEMA, which is metadata and is
--- not billed as scanned bytes. Query 3 is never run. Query 4 scans a couple of days of one
--- small table. None of it needs a billing account -- the BigQuery sandbox is enough.
+-- not billed as scanned bytes. Query 3 is never run. Queries 4 and 5 read a couple of days
+-- of one table. None of it needs a billing account -- the sandbox is enough.
 --
--- Goal: settle the two open M0 items, which are the last unknowns in the ingest cost.
---   1. Do the column names in sql/export_block_range.sql match the live schema?
---   2. How many bytes does one month-partitioned export actually scan?
+-- Status:
+--   1. Column names        DONE 2026-09-09 -- all 42 exist, export query needs no changes.
+--   2. Partitioning        confirm block_timestamp is the partition column.
+--   3. Scan cost           OPEN -- the last unknown in the ingest cost model.
+--   4. Coverage / head     tells you which months exist, for query 3's dates.
+--   5. STRING number format OPEN -- decides how the repack step parses v and y_parity,
+--                          and gets it wrong silently if assumed.
 
 -- ---------------------------------------------------------------------------
 -- 1. Column names and types for the three tables we read.
@@ -70,3 +74,21 @@ WHERE block_timestamp >= TIMESTAMP('2026-07-01')
 SELECT MAX(block_number) AS head, MAX(block_timestamp) AS head_time
 FROM `bigquery-public-data.blockchain_analytics_ethereum_mainnet_us.blocks`
 WHERE block_timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 2 DAY);
+
+-- ---------------------------------------------------------------------------
+-- 5. What do the STRING-typed numeric columns actually look like?
+--
+--    v, y_parity, quantity, token_id and value_lossless are all STRING in the source.
+--    How they are *formatted* decides how the pipeline parses them, and getting it wrong
+--    fails silently: try_cast('0x1' AS UBIGINT) is NULL, not an error, so `v` would
+--    quietly become empty for every row.
+--
+--    Expect either hex ('0x1', '0x1b') or decimal ('1', '27'). Cheap: one small block
+--    range, five columns.
+-- ---------------------------------------------------------------------------
+SELECT v, y_parity, value_lossless
+FROM `bigquery-public-data.blockchain_analytics_ethereum_mainnet_us.transactions`
+WHERE block_timestamp >= TIMESTAMP('2026-07-14')
+  AND block_timestamp <  TIMESTAMP('2026-07-16')
+  AND block_number BETWEEN 25534200 AND 25534210
+LIMIT 20;

@@ -109,6 +109,23 @@ GCS staging: pennies (short-lived). R2 class-A writes: negligible at ~3 files pe
   status, started_at, finished_at`) and doubles as the data source for the manifest and the
   "data current to block N" badge in the explorer.
 
+## Parsing the STRING-typed numeric columns
+
+The source types `v`, `y_parity`, `quantity`, `token_id` and `value_lossless` as STRING
+(verified 2026-09-09). Their *formatting* is still open, and it decides how the repack step
+parses them. This matters more than it looks: `try_cast('0x1' AS UBIGINT)` in DuckDB
+returns NULL rather than raising, so if `v` arrives as hex and the pipeline assumes
+decimal, every row silently loses its `v` and nothing fails.
+
+`pipeline/repack.py` currently parses `v` and `y_parity` as integers, which is correct for
+the CSV export in the repo (pandas had already numeric-ified them) but may not be for
+Parquet straight out of `EXPORT DATA`. `sql/verify_schema.sql` query 5 settles it in one
+cheap read. Until it is run, treat this as the open item most likely to cause silent data
+loss on the first real export.
+
+The 256-bit columns are unaffected: they stay decimal strings end to end and are never
+cast to a fixed-width type.
+
 ## Schema drift
 
 The public dataset is maintained by Google and can add columns or rename tables. The

@@ -192,36 +192,44 @@ def load(ch: ClickHouse, db: str, lo: int, n: int, hot: str) -> None:
     """, database=db)
 
 
+# {hash} and {addr} are resolved to literals before the run. Picking them inside the
+# benchmark query -- e.g. "the busiest address" via GROUP BY -- measures that scan instead
+# of the lookup, which is how an earlier version of this file reported the address lookup
+# reading the whole index table.
 BENCHMARKS = {
     "block range page (50 rows)": """
         SELECT block_number, transaction_index, hex(transaction_hash), toString(value)
         FROM {db}.transactions
         WHERE block_number >= {mid} AND block_number <= {mid} + 99
         ORDER BY block_number, transaction_index LIMIT 50""",
-    "deep page via keyset cursor": """
+    "deep page, keyset (tuple only)": """
         SELECT block_number, transaction_index FROM {db}.transactions
         WHERE (block_number, transaction_index) > ({mid}, 5)
+          AND block_number <= {mid} + 99
+        ORDER BY block_number, transaction_index LIMIT 50""",
+    "deep page, keyset + leading bound": """
+        SELECT block_number, transaction_index FROM {db}.transactions
+        WHERE block_number >= {mid}
+          AND (block_number, transaction_index) > ({mid}, 5)
           AND block_number <= {mid} + 99
         ORDER BY block_number, transaction_index LIMIT 50""",
     "transaction by hash (index table)": """
         SELECT block_number, transaction_index FROM {db}.transactions
         WHERE (block_number, transaction_index) IN (
           SELECT block_number, transaction_index FROM {db}.tx_by_hash
-          WHERE transaction_hash = (SELECT transaction_hash FROM {db}.tx_by_hash LIMIT 1))""",
+          WHERE transaction_hash = unhex('{hash}'))""",
     "address -> transactions (index table)": """
         SELECT block_number, transaction_index FROM {db}.transactions
         WHERE (block_number, transaction_index) IN (
           SELECT block_number, transaction_index FROM {db}.tx_by_address
-          WHERE address = (SELECT address FROM {db}.tx_by_address
-                           GROUP BY address ORDER BY count() DESC LIMIT 1)
+          WHERE address = unhex('{addr}')
           ORDER BY block_number, transaction_index LIMIT 50)
         ORDER BY block_number, transaction_index LIMIT 50""",
     "address lookup, the JOIN form (rejected)": """
         SELECT f.block_number FROM {db}.tx_by_address i
         INNER JOIN {db}.transactions f
           ON f.block_number = i.block_number AND f.transaction_index = i.transaction_index
-        WHERE i.address = (SELECT address FROM {db}.tx_by_address
-                           GROUP BY address ORDER BY count() DESC LIMIT 1)
+        WHERE i.address = unhex('{addr}')
         ORDER BY i.block_number LIMIT 50""",
     "stats over 10k blocks (materialized)": """
         SELECT sum(tx_count), sum(transfer_count), toString(sum(eth_moved))
@@ -242,10 +250,15 @@ def benchmark(ch: ClickHouse, db: str, label: str, repeats: int = 3) -> list[dic
     lo = int(ch.one(f"SELECT min(block_number) FROM {db}.transactions", db))
     hi = int(ch.one(f"SELECT max(block_number) FROM {db}.transactions", db))
     mid = lo + (hi - lo) // 2
+    # Resolved once, outside the measured queries.
+    target_hash = ch.one(f"SELECT hex(transaction_hash) FROM {db}.tx_by_hash LIMIT 1", db)
+    target_addr = ch.one(
+        f"SELECT hex(address) FROM {db}.tx_by_address "
+        f"GROUP BY address ORDER BY count() DESC LIMIT 1", db)
     results = []
 
     for name, template in BENCHMARKS.items():
-        sql = template.format(db=db, lo=lo, mid=mid)
+        sql = template.format(db=db, lo=lo, mid=mid, hash=target_hash, addr=target_addr)
         best = None
         qid = None
         for r in range(repeats):

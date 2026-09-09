@@ -105,9 +105,43 @@ hash does not compress. Skip indexes are cheap: 153 KiB across both fact tables.
 A one-year server therefore needs ~450 GB of NVMe with headroom for merges, and five years
 ~2 TB. Both sit comfortably inside the hardware already priced below.
 
-**What this does not prove.** 100 blocks fit entirely in page cache, so the latency targets
-in this spec remain unvalidated — they need a real backfill. What is validated is the
-schema, the load path, the storage ratio and the correctness of every derived structure.
+### Does query cost stay flat as the table grows? (measured to 67.7 M rows)
+
+The 100-block sample says nothing about behaviour at scale, so `pipeline/scaletest.py`
+replicates it into a throwaway database — keeping the hot addresses stable and perturbing
+the long tail, so cardinality stays realistic — and measures at increasing sizes.
+
+The metric is `read_rows`, not wall time. A laptop caches 3 GB entirely, so timings here
+are optimistic. How much data ClickHouse *had to touch* survives that, and it is the
+property that decides whether the design scales: if a query reads the same number of rows
+whether the table holds 17 million or 68 million, the index is working. If it grows with
+the table, no hardware fixes it.
+
+| Query | 16.9 M rows | 67.7 M rows | Growth | |
+|---|---|---|---|---|
+| Block range page (50 rows) | 49,073 | 22,344 | 0.5× | flat |
+| Deep page, keyset + leading bound | 40,881 | 15,268 | 0.4× | flat |
+| Transaction by hash | 48,975 | 24,399 | 0.5× | flat |
+| Address → transactions | 24,365 | 24,365 | 1.0× | flat |
+| Flat join page (records view) | 73,649 | 22,756 | 0.3× | flat |
+| Stats over a 10k-block range | 5,000 | 16,384 | — | bounded by the range, not the table |
+| *Deep page, tuple comparison only* | *1,067,682* | *4,100,940* | *3.8×* | **rejected** |
+| *Address lookup via INNER JOIN* | *2,228,708* | *8,832,912* | *4.0×* | **rejected** |
+
+Every production access pattern is flat while the table grows 4×. Both rejected patterns
+grow at exactly the table's growth rate — and both were in the API before this test found
+them (see the ingest and API specs; the fixes are `keysetPredicate`'s redundant bound on
+the leading key column, and reading fact tables by key rather than joining them).
+
+The storage projection also survives: 0.1517 MB per block here against 0.1556 measured on
+real data, which extrapolates to **399 GB/year against the 409 GB** measured directly — a
+2.4% difference at 200× the volume.
+
+**What this still does not prove.** 3 GB fits in page cache, so absolute latency at a
+billion rows remains unvalidated and needs a real backfill. Nor does it prove merge
+pressure or bloom-filter selectivity against a full year of genuine address cardinality.
+What it does establish is the harder property: query cost is independent of table size for
+every pattern the API uses.
 
 **What the re-measurement changed.** The flat CSV is 3.4× larger per block than the
 single-block draft assumed, but the *compressed* figure — the one that sets the storage

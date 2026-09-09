@@ -143,10 +143,11 @@ JOIN form alongside the fixed one so the gap stays visible.
 
 ## What this does NOT prove
 
-- **Latency.** 100 blocks fit in page cache. Every performance target in the architecture
-  spec is unvalidated until a real backfill exists.
-- **Ingest cost.** The BigQuery scan figures are still estimates; a dry run settles them.
-  The dry run itself is free, and the BigQuery sandbox needs no credit card.
+- **Absolute latency.** The scale test shows query cost is independent of table size, which
+  is the harder property, but 3 GB still fits in page cache. Real latency at a billion rows
+  needs a real backfill.
+- **Merge pressure and bloom-filter selectivity** against a full year of genuine address
+  cardinality.
 - **Anything requiring a bucket**: `EXPORT DATA` to GCS, the R2 upload, `s3()` loads,
   object versioning, the daily schedule.
 - **Scale behaviour**: bloom filter selectivity, merge pressure and address-index size at a

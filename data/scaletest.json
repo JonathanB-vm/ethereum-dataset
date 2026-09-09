@@ -1,0 +1,187 @@
+{
+  "replicas": 200,
+  "checkpoints": [
+    {
+      "replicas": 50,
+      "blocks": 5000,
+      "size": {
+        "rows": 16927950,
+        "compressed_mb": 769.4,
+        "uncompressed_mb": 3173.5,
+        "skip_index_mb": 9.0,
+        "ratio": 4.12,
+        "tables": {
+          "block_stats": {
+            "rows": 5000,
+            "mb": 11.8
+          },
+          "blocks": {
+            "rows": 5000,
+            "mb": 0.2
+          },
+          "token_transfers": {
+            "rows": 2197050,
+            "mb": 96.7
+          },
+          "transactions": {
+            "rows": 2032100,
+            "mb": 457.1
+          },
+          "transfers_by_address": {
+            "rows": 6593850,
+            "mb": 61.2
+          },
+          "tx_by_address": {
+            "rows": 4062850,
+            "mb": 67.2
+          },
+          "tx_by_hash": {
+            "rows": 2032100,
+            "mb": 75.2
+          }
+        }
+      },
+      "benchmarks": [
+        {
+          "query": "block range page (50 rows)",
+          "ms": 13.1,
+          "read_rows": 49073,
+          "read_mb": 0.77
+        },
+        {
+          "query": "deep page, keyset (tuple only)",
+          "ms": 24.9,
+          "read_rows": 1067682,
+          "read_mb": 6.41
+        },
+        {
+          "query": "deep page, keyset + leading bound",
+          "ms": 14.5,
+          "read_rows": 40881,
+          "read_mb": 0.25
+        },
+        {
+          "query": "transaction by hash (index table)",
+          "ms": 17.0,
+          "read_rows": 48975,
+          "read_mb": 0.51
+        },
+        {
+          "query": "address -> transactions (index table)",
+          "ms": 14.7,
+          "read_rows": 24365,
+          "read_mb": 0.47
+        },
+        {
+          "query": "address lookup, the JOIN form (rejected)",
+          "ms": 228.5,
+          "read_rows": 2228708,
+          "read_mb": 17.21
+        },
+        {
+          "query": "stats over 10k blocks (materialized)",
+          "ms": 9.4,
+          "read_rows": 5000,
+          "read_mb": 0.26
+        },
+        {
+          "query": "flat join page (the records view)",
+          "ms": 24.3,
+          "read_rows": 73649,
+          "read_mb": 0.37
+        }
+      ]
+    },
+    {
+      "replicas": 200,
+      "blocks": 20000,
+      "size": {
+        "rows": 67711800,
+        "compressed_mb": 3034.9,
+        "uncompressed_mb": 12694.0,
+        "skip_index_mb": 35.27,
+        "ratio": 4.18,
+        "tables": {
+          "block_stats": {
+            "rows": 20000,
+            "mb": 47.3
+          },
+          "blocks": {
+            "rows": 20000,
+            "mb": 0.6
+          },
+          "token_transfers": {
+            "rows": 8788200,
+            "mb": 387.8
+          },
+          "transactions": {
+            "rows": 8128400,
+            "mb": 1836.6
+          },
+          "transfers_by_address": {
+            "rows": 26375400,
+            "mb": 225.4
+          },
+          "tx_by_address": {
+            "rows": 16251400,
+            "mb": 233.3
+          },
+          "tx_by_hash": {
+            "rows": 8128400,
+            "mb": 303.8
+          }
+        }
+      },
+      "benchmarks": [
+        {
+          "query": "block range page (50 rows)",
+          "ms": 27.6,
+          "read_rows": 22344,
+          "read_mb": 0.38
+        },
+        {
+          "query": "deep page, keyset (tuple only)",
+          "ms": 123.2,
+          "read_rows": 4100940,
+          "read_mb": 24.61
+        },
+        {
+          "query": "deep page, keyset + leading bound",
+          "ms": 15.5,
+          "read_rows": 15268,
+          "read_mb": 0.09
+        },
+        {
+          "query": "transaction by hash (index table)",
+          "ms": 13.9,
+          "read_rows": 24399,
+          "read_mb": 0.36
+        },
+        {
+          "query": "address -> transactions (index table)",
+          "ms": 17.4,
+          "read_rows": 24365,
+          "read_mb": 0.47
+        },
+        {
+          "query": "address lookup, the JOIN form (rejected)",
+          "ms": 1092.4,
+          "read_rows": 8832912,
+          "read_mb": 66.99
+        },
+        {
+          "query": "stats over 10k blocks (materialized)",
+          "ms": 8.8,
+          "read_rows": 16384,
+          "read_mb": 0.85
+        },
+        {
+          "query": "flat join page (the records view)",
+          "ms": 12.4,
+          "read_rows": 22756,
+          "read_mb": 0.15
+        }
+      ]
+    }
+  ]
+}

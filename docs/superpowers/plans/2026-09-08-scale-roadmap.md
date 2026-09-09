@@ -44,6 +44,7 @@ schema, the API and the frontend are all exercised for real before a single buck
 - [x] `/v1/records`, the flat 35-column join — reconstructs the source CSV exactly (74,889 rows), proving the normalization is lossless.
 - [x] Frontend seam: `QueryProvider`, `ApiQueryProvider`, `MemoryQueryProvider`, and one contract suite over a recorded API fixture.
 - [x] `pipeline/README.md` — how to run the whole stack locally, and what it does and does not prove.
+- [x] Scale test to 67.7 M rows (`pipeline/scaletest.py`). *(Every production access pattern holds **flat** `read_rows` while the table grows 4×; storage extrapolates to 399 GB/year against the 409 GB measured directly. Found two bugs that are invisible at 100 blocks and fatal at a billion rows: lookups joined the fact tables, reading 110–120% of them per request, and keyset pagination lacked a leading-column bound so every page read everything before the cursor — 4,079,743 rows against 8,000.)*
 - [ ] Rewire the UI: table in manual pagination/sorting/filtering mode, filters to query params, block picker, stats band from the API. Wants the API deployed to review against.
 - [ ] Ingest orchestration end to end (needs BigQuery, GCS and R2 credentials).
 

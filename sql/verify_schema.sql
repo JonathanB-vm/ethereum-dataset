@@ -48,19 +48,28 @@ WHERE table_name IN ('transactions', 'token_transfers', 'blocks')
 ORDER BY table_name;
 
 -- ---------------------------------------------------------------------------
--- 2b. Partition GRANULARITY. Run this.
+-- 2b. Partition GRANULARITY.
 --
---     Query 2 proves block_timestamp is the partitioning column, but INFORMATION_SCHEMA
---     .COLUMNS does not say whether partitions are daily, monthly or yearly -- and the
---     whole cost model assumes MONTHLY (it is why the backfill exports one month per
---     query rather than one chunk per query). The table DDL states it outright.
---     Free: this reads metadata, not data.
+--     Query 2 proves block_timestamp is the partitioning column, but not whether
+--     partitions are daily, monthly or yearly -- and the cost model's "export one month
+--     per query" rests on monthly.
 --
---     Look for: PARTITION BY TIMESTAMP_TRUNC(block_timestamp, MONTH)
+--     The obvious route, reading the table DDL, does NOT work here: BigQuery returns an
+--     empty `ddl` for a public dataset you do not own (confirmed 2026-09-09).
+--     INFORMATION_SCHEMA.PARTITIONS is worth a try and may be restricted the same way.
+--
+--     The reliable route is to measure the pruning instead of reading about it, which is
+--     what queries 3 and 3c do together. That is better evidence anyway: what the cost
+--     model needs is not the declared granularity but how many bytes a filter actually
+--     prunes away.
 -- ---------------------------------------------------------------------------
-SELECT table_name, ddl
-FROM `bigquery-public-data.blockchain_analytics_ethereum_mainnet_us.INFORMATION_SCHEMA.TABLES`
-WHERE table_name IN ('transactions', 'token_transfers', 'blocks');
+-- Optional, may return "permission denied" on a public dataset. If it works, the shape of
+-- partition_id is the answer: '202608' = MONTH, '20260814' = DAY, '2026' = YEAR.
+SELECT table_name, partition_id, total_rows
+FROM `bigquery-public-data.blockchain_analytics_ethereum_mainnet_us.INFORMATION_SCHEMA.PARTITIONS`
+WHERE table_name = 'transactions'
+ORDER BY partition_id DESC
+LIMIT 10;
 
 -- ---------------------------------------------------------------------------
 -- 3. The cost probe. DO NOT RUN -- paste it and read the estimate.
@@ -110,6 +119,35 @@ FROM `bigquery-public-data.blockchain_analytics_ethereum_mainnet_us.token_transf
 WHERE block_timestamp >= TIMESTAMP('2026-08-01')
   AND block_timestamp <  TIMESTAMP('2026-09-01')
   AND block_number BETWEEN 25700000 AND 25709999;
+
+-- ---------------------------------------------------------------------------
+-- 3c. Partition granularity, measured. DO NOT RUN -- read the estimate.
+--
+--     Identical to query 3 except the window is ONE DAY instead of one month. Compare the
+--     two estimates:
+--
+--       same bytes as query 3        -> partitions are MONTHLY. A day-sized filter cannot
+--                                       prune below one month, which is exactly the
+--                                       assumption the ingest spec is built on.
+--       roughly 1/31 of query 3      -> partitions are DAILY, and the daily job gets much
+--                                       cheaper than budgeted. Good news; update the spec.
+--
+--     This measures the behaviour the cost model depends on, rather than the declared
+--     granularity, so it is the stronger evidence even where the DDL is readable.
+-- ---------------------------------------------------------------------------
+SELECT
+  block_hash, block_number, block_timestamp,
+  transaction_hash, transaction_index, nonce,
+  from_address, to_address,
+  value_lossless,
+  gas, gas_price, input,
+  max_fee_per_gas, max_priority_fee_per_gas,
+  transaction_type, chain_id,
+  TO_JSON_STRING(access_list) AS access_list,
+  r, s, v, y_parity
+FROM `bigquery-public-data.blockchain_analytics_ethereum_mainnet_us.transactions`
+WHERE block_timestamp >= TIMESTAMP('2026-08-14')
+  AND block_timestamp <  TIMESTAMP('2026-08-15');
 
 -- ---------------------------------------------------------------------------
 -- 4. Head discovery, as the daily job does it. Tiny scan; safe to run.

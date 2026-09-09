@@ -8,8 +8,14 @@ Query draft: `sql/export_block_range.sql`
 ## Principles
 
 1. **Never scan a source table without a partition filter.** The source tables are
-   partitioned **by month** on `block_timestamp` (official schema page; see the industry
-   comparison doc). Every query carries a `block_timestamp BETWEEN …` clause derived from
+   partitioned on `block_timestamp` — confirmed 2026-09-09 against the live
+   `INFORMATION_SCHEMA`, which also shows it is their sole clustering column. The
+   *granularity* is taken from the official schema page as **monthly** and is not yet
+   independently confirmed: BigQuery returns an empty `ddl` for a public dataset you do not
+   own, so the DDL route is closed. It is settled instead by measurement — compare the
+   dry-run estimate for a one-day filter against a one-month filter (`sql/verify_schema.sql`
+   queries 3 and 3c). Equal estimates mean monthly partitions; a ~31× smaller one means
+   daily, and the daily job is then far cheaper than budgeted here. Every query carries a `block_timestamp BETWEEN …` clause derived from
    the block range, in addition to the `block_number` range. Because the partition is
    monthly, one query touches at least one whole month of the selected columns, so
    **the backfill exports one month per query**, not one chunk per query, and the daily

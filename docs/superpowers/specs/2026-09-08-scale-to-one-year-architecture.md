@@ -7,9 +7,10 @@ Companion specs: `2026-09-08-data-model.md`, `2026-09-08-ingest-pipeline.md`,
 
 ## Problem
 
-The explorer today is a browser-only SPA that fetches one CSV (`public/data/analytics_25534300.csv`,
-one block, 600 records, 6.5 MB) and sorts, filters, aggregates and exports entirely in the
-client. The research group wants:
+The explorer today is a browser-only SPA that loads the whole dataset up front
+(`public/data/rows.csv.gz`, 100 blocks, 74,889 records, with calldata fetched per row from
+256 gzipped shards) and sorts, filters, aggregates and exports entirely in the client. The
+research group wants:
 
 1. **Next milestone:** one year of mainnet blocks (~2.63 M blocks at 12 s per block).
 2. **Later:** the last five years (~10–13 M blocks), everything the source dataset carries.
@@ -20,26 +21,76 @@ Nothing in the current data path survives the jump, while the UI layer largely d
 
 ## Sizing (measured, then extrapolated)
 
-Measured on the single block in the repo (re-measure on the 100-block file with
-`node scripts/measure-csv.mjs <file>` before buying hardware; the figures below assume the
-single block is representative).
+Measured on the 100-block export in the repo (`analytics_25534200_25534299.csv`, blocks
+25,534,200–25,534,299, 2026-07-14) with `node scripts/measure-csv.mjs <file>`. The earlier
+draft of this table extrapolated from a single block; those figures are kept in the last
+column so the correction is visible.
 
-| Per block | Value |
-|---|---|
-| Records in the current flat join | 600 (504 transfers + 96 plain transactions) |
-| Unique transactions | 256 |
-| Flat CSV size | 6.5 MB (78% of bytes are `input_tx`, 94% of those are duplicates of the same tx) |
-| Normalized (transactions + transfers), uncompressed | 0.64 MB |
-| Normalized, gzip | 0.15 MB |
-| Normalized, Parquet + zstd (estimate) | ~0.10 MB |
+| Per block | Measured (100 blocks) | Earlier 1-block draft |
+|---|---|---|
+| Records in the current flat join | 749 (439 transfers + 309 plain transactions) | 600 (504 + 96) |
+| Unique transactions | 406 | 256 |
+| Flat CSV size | 21.95 MB (96.9% of bytes are `input_tx`, 98.6% of those are duplicates of the same tx) | 6.5 MB (78% / 94%) |
+| Deduped, gzip (`rows.csv.gz` + `calldata/*.json.gz`) | 0.161 MB | 0.15 MB |
+| Normalized, Parquet + zstd | **0.1028 MB (measured)** | ~0.10 MB (estimate) |
+
+The gzip row is measured on the artifacts the prep script already produces (12.05 MB of
+rows plus 4.01 MB of deduped calldata per 100 blocks). It is an **upper bound** on the
+normalized size: `rows.csv.gz` is still the flat join, so transaction columns are repeated
+on every transfer row. Event mix over the 100 blocks: 43,595 ERC-20, 292 ERC-721,
+54 ERC-1155. 12,220 of 40,642 transactions (30%) carry calldata; 2,175 rows carry a numpy
+`array(...)` repr in `access_list_tx`, confirming that column is unparseable as exported.
 
 | Extrapolated | One year (2.63 M blocks) | Five years (10–13 M blocks) |
 |---|---|---|
-| Transactions | ~670 M rows | ~2.5–3.3 B rows |
-| Token transfers | ~1.3 B rows | ~5–6.5 B rows |
-| Flat CSV, uncompressed | ~17 TB | ~70 TB |
-| Normalized Parquet + zstd | ~250 GB | ~1–1.3 TB |
-| ClickHouse on disk (incl. indexes, MVs) | ~350 GB | ~1.5 TB |
+| Transactions | ~1.07 B rows | ~4.1–5.3 B rows |
+| Token transfers | ~1.16 B rows | ~4.4–5.7 B rows |
+| Flat CSV, uncompressed | ~58 TB | ~220–285 TB |
+| Normalized Parquet + zstd | **270 GB (measured)** | ~1.0–1.4 TB |
+| ClickHouse on disk (incl. indexes, MVs) | ~380 GB | ~1.4–1.9 TB |
+
+The five-year row is an over-estimate: it applies today's 406 transactions per block to
+blocks going back to 2021, when per-block activity was materially lower. Treat it as a
+ceiling for disk sizing, not a forecast.
+
+### Where the bytes actually go
+
+Produced by running `pipeline/repack.py` on the 100-block export and reading the Parquet
+column statistics — no cloud account involved. Per-year figures scale the 100-block
+measurement by 26,300.
+
+| Column | GB / year | Share |
+|---|---|---|
+| `transactions.input` (calldata) | 75.6 | 28% |
+| `transactions.r` + `.s` (signatures) | 76.0 | 28% |
+| `transaction_hash` (both tables) | 47.2 | 18% |
+| addresses (`from`/`to`/`token`, both tables) | 47.6 | 18% |
+| everything else | ~23 | 8% |
+| **total** | **270** | |
+
+Two of those five lines are optional, which turns the storage figure into a choice:
+
+| Option | GB / year | Note |
+|---|---|---|
+| A. hex strings, keep signatures | **270** | as specified today |
+| B. binary hashes/addresses, keep signatures | 252 | −6.7%, costs researcher convenience |
+| C. hex strings, drop `r`/`s`/`v`/`y_parity` | **194** | −28%, needs the research group's sign-off |
+| D. binary + drop signatures | 182 | −33% |
+
+The two open decisions in the roadmap are therefore worth very different amounts. Hex
+versus binary is a 6.7% question and the spec's answer (hex, for pandas compatibility)
+stands cheaply. Signatures are a 28% question — by far the largest storage lever left, and
+the one that decides between a 1 TB and a 2 TB disk at five-year scale.
+
+**What the re-measurement changed.** The flat CSV is 3.4× larger per block than the
+single-block draft assumed, but the *compressed* figure — the one that sets the storage
+bill — landed at 270 GB against the draft's ~250 GB, because nearly all the extra bytes are
+duplicated calldata that dedupes away. Storage cost and server sizing stand. Row counts do
+not: transactions come in at 1.6× the draft, which raises the cost of the per-row
+structures (address index tables, bloom filters) and, in particular, the signature columns
+— `r` and `s` measure **76 GB / year**, against ~43 GB in the first draft and ~68 GB in the
+row-count correction. At 28% of the footprint that makes the keep-or-drop decision on
+signatures the largest storage lever in the project.
 
 Two conclusions drive the design: normalization alone is a 4× saving even after
 compression, and a year fits on one NVMe disk. This is mid-sized data: too big for a
@@ -119,7 +170,7 @@ Prices verified 2026-09-08 (details and sources in the industry comparison doc).
 | Component | One year | Five years |
 |---|---|---|
 | Dedicated server (Hetzner AX52: Ryzen 7 7700, 64 GB, 2×1 TB NVMe ≈ €64 / month; AX102: 128 GB, 2×1.92 TB NVMe, quoted €122–259 / month, verify) or an institutional server | ~$70–130 / month | ~$150–280 / month, needs ≥ 3 TB NVMe |
-| R2 storage ($0.015 / GB-month, egress $0) | ~250 GB → ~$4 | ~1 TB → ~$15 |
+| R2 storage ($0.015 / GB-month, egress $0) | ~270 GB → ~$4 | ~1 TB → ~$15 |
 | Cloudflare CDN (free tier) | $0 | $0 |
 | BigQuery ingest (monthly partitions; the daily job re-reads the current month) | ~$10–20 / month, or ~$2 if run weekly | same |
 | **Total** | **~$85–155 / month** | **~$170–315 / month** |
@@ -160,7 +211,7 @@ DuckDB query over R2 that touches one contract for one month reads 50–500 MB.
 Shrink the data: normalize (store `input` once per tx); store addresses and hashes as
 bytes, not hex strings; per-column codecs (Delta+ZSTD on block numbers and timestamps,
 LowCardinality on enums); drop `value_tx` (duplicate of `value_lossless_tx`); confirm with
-researchers whether the ECDSA signature columns (~43 GB / year, incompressible) are needed.
+researchers whether the ECDSA signature columns (~68 GB / year, incompressible) are needed.
 
 Speed up lookups: sort key = access pattern `(block_number, transaction_index, …)`; bloom
 filters on hashes and addresses, minmax on timestamps; small address index tables fed by
@@ -188,8 +239,9 @@ lossless 256-bit values.
 
 ## Risks and open questions
 
-- **Estimates rest on one block.** Re-measure on the 100-block file; block-to-block variance
-  in `input` size and transfer counts is large.
+- ~~**Estimates rest on one block.**~~ Resolved: re-measured on the 100-block export (see
+  Sizing). Compressed storage held within 7%; row counts rose ~1.6× for transactions. The
+  sample is still 20 minutes of one day, so it carries no seasonal or pre-merge variation.
 - **Source dataset column names** in `sql/export_block_range.sql` were written from memory;
   verify against the BigQuery schema tab before the first run.
 - **Source freshness.** The public dataset is refreshed by Google; if it lags, our head lags.

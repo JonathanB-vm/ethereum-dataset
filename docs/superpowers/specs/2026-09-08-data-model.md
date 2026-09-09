@@ -33,14 +33,16 @@ served by the API for bounded block ranges. Nothing is lost: every source column
 | `is_token_transfer` | dropped | | implied by the table |
 
 Open decision: `r`, `s`, `v`, `y_parity` are ~64 random bytes per transaction that do not
-compress (~43 GB / year). Keep if the researchers need signature analysis; otherwise drop
-them from the canonical Parquet and note it in the data dictionary.
+compress. At the measured rate of 406 transactions per block (~1.07 B per year) that is
+**~68 GB / year**, roughly a quarter of the annual Parquet footprint — an earlier estimate
+of ~43 GB assumed 256 transactions per block. Keep if the researchers need signature
+analysis; otherwise drop them from the canonical Parquet and note it in the data dictionary.
 
 ### Types
 
 - Addresses: 20-byte binary. Hashes: 32-byte binary. Rendered as `0x…` hex only at the API edge.
-- 256-bit integers (`value`, `quantity`, `token_id`): `UInt256` in ClickHouse, `DECIMAL(76,0)`
-  or a 32-byte fixed binary in Parquet (see below). Never a float.
+- 256-bit integers (`value`, `quantity`, `token_id`): `UInt256` in ClickHouse, a **decimal
+  string** in Parquet (see below). Never a float.
 - Fee fields (`gas_price`, `max_fee_per_gas`, `max_priority_fee_per_gas`): `UInt128`.
 - `block_timestamp`: seconds since epoch, UTC.
 - `event_type`: enum `ERC-20 | ERC-721 | ERC-1155` (extend if the source adds values).
@@ -69,10 +71,20 @@ zero-padded block numbers) so listings sort lexically and cryo users feel at hom
 - **Hashes and addresses are `0x`-prefixed lowercase hex strings** in the published
   files, matching BigQuery, AWS Public Blockchain Data and researchers' pandas habits.
   Binary storage is internal to ClickHouse only. (cryo is the one tool that publishes
-  binary; the cost of hex after zstd is small.)
-- **256-bit values** are written as Parquet `DECIMAL(76,0)` (fixed 32-byte binary). DuckDB
-  and pyarrow read it as a decimal; document a one-line cast for pandas users. A lossy
-  float column is never written (AWS's public dataset stores `value` as a double; we do not).
+  binary.) **Measured**, by writing both variants of the 100-block sample: hex costs
+  270 GB/year against 252 GB/year for binary — a **6.7% premium**, because zstd compresses
+  hex nibbles well. That settles the open decision: the researcher-facing convenience is
+  worth 18 GB a year (~$0.27/month on R2).
+- **256-bit values** (`value`, `quantity`, `token_id`) are written as **decimal strings**.
+  An earlier draft specified Parquet `DECIMAL(76,0)`; that is wrong twice over. DuckDB caps
+  `DECIMAL` at 38 digits and rejects anything wider, and `2^256 − 1` is **78** digits, so
+  even a 76-digit decimal could not hold the range. A decimal string is what the source
+  itself uses (`value_lossless STRING`, `quantity STRING`, `token_id STRING` in BigQuery)
+  and what this app already carries end to end through `BigInt`, so the format adds no
+  conversion step. Measured cost of the string encoding: `value` 1.5 GB/year, `quantity`
+  4.4 GB/year — under 3% of the footprint combined. Document a one-line cast for pandas
+  users. A lossy float column is never written (AWS's public dataset stores `value` as a
+  double; we do not).
 - **Manifest** (`manifest.json`): schema version, dataset release tag, head block, and per
   file: table, path, block range, row count, bytes, sha256, created-at. The manifest is
   written last, so a partially uploaded chunk is never visible. A plain `checksums.txt`

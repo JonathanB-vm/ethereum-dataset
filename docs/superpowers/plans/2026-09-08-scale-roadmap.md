@@ -10,15 +10,29 @@ with automatic daily refresh from BigQuery.
 
 ## M0 — Measure and decide (days)
 
-- [ ] Run `node scripts/measure-csv.mjs analytics_25534200_25534299.csv` on the 100-block file; update the sizing tables in the architecture spec.
-- [ ] Verify column names and the partition column of the three source tables in the BigQuery console; fix `sql/export_block_range.sql`.
+- [x] Run `node scripts/measure-csv.mjs analytics_25534200_25534299.csv` on the 100-block file; update the sizing tables in the architecture spec. *(Done: 749 records and 406 transactions per block, 21.95 MB flat per block, 96.9% of bytes `input_tx` with 98.6% duplicated.)*
+- [x] Produce real Parquet with `pipeline/repack.py` and measure it, replacing the last estimate in the cost model. *(Done: 0.1028 MB/block → **270 GB/year**, against the ~250 GB estimate. Row counts verified against the source: 40,642 transactions, 43,941 transfers, 100 blocks, no unexpected nulls, 37-digit quantities intact.)*
+- [ ] Verify column names and the partition column of the three source tables in the BigQuery console; fix `sql/export_block_range.sql`. *(The BigQuery sandbox needs no credit card, and dry runs never scan, so this and the next item may both be free.)*
 - [ ] Dry-run the export query for one 10,000-block chunk and record `total_bytes_processed`.
-- [ ] Decide: signature columns (`r`, `s`, `v`, `y_parity`) kept or dropped.
-- [ ] Decide: hosting (dedicated server vs. ClickHouse Cloud vs. institutional server).
+- [ ] **Decide: signature columns (`r`, `s`, `v`, `y_parity`) kept or dropped.** Measured at **76 GB/year, 28% of the footprint** — the largest storage lever in the project. Needs the research group.
+- [ ] Decide: hosting (dedicated server vs. ClickHouse Cloud vs. institutional server). Sizing input is settled: ~380 GB of ClickHouse disk for one year, ~1.4–1.9 TB for five.
 - [ ] Decide: API language (TypeScript recommended).
 - [ ] Decide: 10,000 blocks per Parquet file (spec) vs 8,192 (era1 convention) vs 1,000 (cryo default).
-- [ ] Decide: hex strings (spec, matches BigQuery/AWS) vs binary (cryo) in the published Parquet.
-- [ ] Create the R2 bucket (versioning on) and the GCS staging bucket; provision credentials.
+- [x] Decide: hex strings (spec, matches BigQuery/AWS) vs binary (cryo) in the published Parquet. *(Resolved by measurement: hex costs 270 GB/year vs 252 GB for binary — a 6.7% premium, ~$0.27/month on R2. **Keep hex**; pandas/DuckDB convenience is worth far more than 18 GB.)*
+- [ ] Create the R2 bucket (versioning on) and the GCS staging bucket; provision credentials. *(First item that needs a card.)*
+
+## M0.5 — Groundwork that needs no account (in progress)
+
+Everything here runs against the 2.19 GB export already on disk, with DuckDB and a local
+ClickHouse in Docker standing in for BigQuery and the server. The format contract, the
+schema, the API and the frontend are all exercised for real before a single bucket exists.
+
+- [x] `pipeline/repack.py` — flat CSV → three normalized tables → sorted, zstd, checksummed Parquet + manifest.
+- [x] `pipeline/clickhouse/schema.sql` — fact tables, address index tables + MVs, `block_stats`, `ingest_log`.
+- [ ] Load the local Parquet into a Docker ClickHouse; measure real on-disk size, compression ratio and skip-index size against the ~380 GB/year projection.
+- [ ] Ingest job skeleton against a fake BigQuery client: chunking, `ingest_log`, idempotent retry, dry-run cost guard.
+- [ ] API service against local ClickHouse: endpoints, cursor pagination, caps, cache headers.
+- [ ] Frontend: new paged `DataProvider` interface, `apiProvider`, table in manual mode; CSV provider kept as the test double.
 
 ## M1 — One year, end to end (weeks)
 

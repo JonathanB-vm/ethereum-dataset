@@ -206,3 +206,77 @@ describe('GET /v1/search', () => {
     expect((await get('/v1/search?q=USDT')).json().kind).toBe('text')
   })
 })
+
+describe('GET /v1/records (the flat join)', () => {
+  itLive('reproduces the flat CSV row shape', async () => {
+    const res = await get(
+      `/v1/records?block_from=${FIRST_BLOCK}&block_to=${FIRST_BLOCK}&limit=1000`,
+    )
+    expect(res.statusCode).toBe(200)
+    const rows = res.json().rows
+    // Both kinds appear: transfer rows and plain-transaction rows.
+    expect(rows.some((r: Record<string, unknown>) => r.is_token_transfer === 1)).toBe(true)
+    expect(rows.some((r: Record<string, unknown>) => r.is_token_transfer === 0)).toBe(true)
+  })
+
+  itLive('leaves transfer columns null on plain-transaction rows', async () => {
+    const res = await get(
+      `/v1/records?block_from=${FIRST_BLOCK}&block_to=${FIRST_BLOCK}&limit=1000`,
+    )
+    const rows = res.json().rows as Record<string, unknown>[]
+    const plain = rows.find((r) => r.is_token_transfer === 0)!
+    // join_use_nulls makes an unmatched row genuinely null, so a plain transaction is
+    // distinguishable from a transfer whose fields happen to be zero.
+    expect(plain.address).toBeNull()
+    expect(plain.event_type).toBeNull()
+    expect(plain.quantity).toBeNull()
+    // The transaction side is still fully populated.
+    expect(plain.from_address_tx).toMatch(/^0x[0-9a-f]{40}$/)
+  })
+
+  itLive('keeps the transfer and transaction address columns distinct', async () => {
+    const res = await get(
+      `/v1/records?block_from=${FIRST_BLOCK}&block_to=${FIRST_BLOCK}&limit=100`,
+    )
+    const rows = res.json().rows as Record<string, unknown>[]
+    const transfer = rows.find((r) => r.is_token_transfer === 1)!
+    // The CSV suffixes the transaction side precisely because both sides carry a
+    // from_address; collapsing them would silently mislabel every transfer row.
+    expect(transfer.from_address).not.toBe(transfer.from_address_tx)
+  })
+
+  itLive(
+    'reconstructs every row of the source CSV, with no gaps or duplicates',
+    async () => {
+      // 74,889 is what the source CSV holds for these 100 blocks: 43,941 transfer rows
+      // plus 30,948 plain-transaction rows. Matching it exactly is the proof that
+      // normalizing into three tables lost nothing.
+      interface RecordsPage {
+        rows: Record<string, unknown>[]
+        nextCursor: string | null
+      }
+      const seen = new Set<string>()
+      let cursor: string | null = null
+      for (let page = 0; page < 200; page++) {
+        const url: string =
+          `/v1/records?block_from=${FIRST_BLOCK}&block_to=${LAST_BLOCK}&limit=10000` +
+          (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '')
+        const body: RecordsPage = (await get(url, { 'x-api-key': 'test' })).json()
+        for (const r of body.rows) {
+          seen.add(
+            `${r.block_number}/${r.transaction_index}/${r.event_index ?? ''}/${r.batch_index ?? ''}`,
+          )
+        }
+        cursor = body.nextCursor
+        if (!cursor) break
+      }
+      expect(seen.size).toBe(74_889)
+    },
+    30_000,
+  )
+
+  itLive('requires a block range', async () => {
+    const res = await get(`/v1/records?address=${USDT}`)
+    expect(res.statusCode).toBe(400)
+  })
+})

@@ -16,6 +16,7 @@ import {
   buildAddressPage,
   buildHead,
   buildPage,
+  buildRecordsPage,
   buildStats,
   buildTxByHash,
   sortKeyOf,
@@ -68,8 +69,13 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     return headCache
   }
 
+  /** Whether the caller presented an API key, which raises both their limits. */
+  const hasKey = (req: {
+    headers: Record<string, string | string[] | undefined>
+  }): boolean => Boolean(req.headers['x-api-key'])
+
   app.addHook('onRequest', async (req, reply) => {
-    const keyed = Boolean(req.headers['x-api-key'])
+    const keyed = hasKey(req)
     reply.header('x-ratelimit-limit', keyed ? RATE_LIMIT_KEYED : RATE_LIMIT_ANONYMOUS)
     reply.header('x-ratelimit-remaining', keyed ? RATE_LIMIT_KEYED : RATE_LIMIT_ANONYMOUS)
   })
@@ -99,9 +105,10 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     table: Table,
     query: PageQuery,
     reply: FastifyReply,
+    keyed: boolean,
   ): Promise<unknown> {
     const scope = parseScope(query)
-    const limit = resolveLimit(query.limit)
+    const limit = resolveLimit(query.limit, keyed)
     const cursor = query.cursor ? decodeCursor(query.cursor) : undefined
     const dir = query.sort === 'desc' ? 'desc' : 'asc'
 
@@ -129,12 +136,42 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   })
 
   app.get<{ Querystring: PageQuery }>('/v1/transactions', (req, reply) =>
-    servePage('transactions', req.query, reply),
+    servePage('transactions', req.query, reply, hasKey(req)),
   )
 
   app.get<{ Querystring: PageQuery }>('/v1/transfers', (req, reply) =>
-    servePage('token_transfers', req.query, reply),
+    servePage('token_transfers', req.query, reply, hasKey(req)),
   )
+
+  /** The flat 35-column "All Records" view, rebuilt as a query-time join. */
+  app.get<{ Querystring: PageQuery }>('/v1/records', async (req, reply) => {
+    const scope = parseScope(req.query)
+    if (scope.kind !== 'range') {
+      throw new ScopeError('the records view requires a block range')
+    }
+    const limit = resolveLimit(req.query.limit, hasKey(req))
+    const cursor = req.query.cursor ? decodeCursor(req.query.cursor) : undefined
+    const rows = await client.query<Record<string, unknown>>(
+      buildRecordsPage(scope.from, scope.to, limit, cursor),
+    )
+    const { block: head } = await currentHead()
+    applyCache(reply, scope, head)
+
+    const last = rows[rows.length - 1]
+    const nextCursor =
+      rows.length === limit && last
+        ? encodeCursor({
+            key: {
+              block_number: Number(last.block_number),
+              transaction_index: Number(last.transaction_index),
+              event_index: Number(last.event_index ?? 0),
+              batch_index: Number(last.batch_index ?? 0),
+            },
+            dir: 'asc',
+          })
+        : null
+    return { rows, nextCursor }
+  })
 
   app.get<{ Params: { hash: string } }>('/v1/transactions/:hash', async (req, reply) => {
     const hash = normalizeHex(req.params.hash)
@@ -159,13 +196,23 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   app.get<{ Params: { addr: string }; Querystring: PageQuery }>(
     '/v1/addresses/:addr/transactions',
     (req, reply) =>
-      servePage('transactions', { ...req.query, address: req.params.addr }, reply),
+      servePage(
+        'transactions',
+        { ...req.query, address: req.params.addr },
+        reply,
+        hasKey(req),
+      ),
   )
 
   app.get<{ Params: { addr: string }; Querystring: PageQuery }>(
     '/v1/addresses/:addr/transfers',
     (req, reply) =>
-      servePage('token_transfers', { ...req.query, address: req.params.addr }, reply),
+      servePage(
+        'token_transfers',
+        { ...req.query, address: req.params.addr },
+        reply,
+        hasKey(req),
+      ),
   )
 
   app.get<{ Querystring: PageQuery }>('/v1/stats', async (req, reply) => {

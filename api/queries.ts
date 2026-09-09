@@ -214,6 +214,106 @@ export function buildAddressPage(
   }
 }
 
+/**
+ * The flat 35-column view ("All Records"), rebuilt as a query-time join.
+ *
+ * The source CSV is a left join of transactions onto token_transfers: a transaction with
+ * transfers contributes one row per transfer, one without contributes a single row. That
+ * shape is reproduced here rather than stored, which is the whole point of normalizing --
+ * the join costs a bounded range scan, while storing it cost 10x the bytes.
+ *
+ * Transfer-side columns are null on plain-transaction rows, exactly as in the CSV.
+ */
+export function buildRecordsPage(
+  from: number,
+  to: number,
+  limit: number,
+  cursor?: Cursor,
+): BuiltQuery {
+  const keyColumns = [
+    't.block_number',
+    't.transaction_index',
+    'ifNull(tr.event_index, 0)',
+    'ifNull(tr.batch_index, 0)',
+  ]
+  const where = [
+    't.block_number >= {block_from:UInt32}',
+    't.block_number <= {block_to:UInt32}',
+  ]
+  const params: Record<string, string | number> = {
+    block_from: from,
+    block_to: to,
+    limit,
+  }
+  if (cursor) {
+    const keyset = keysetPredicate(cursor, keyColumns)
+    where.push(keyset.sql)
+    Object.assign(params, keyset.params)
+  }
+
+  // Columns are named exactly as the source CSV names them: block-level and transaction
+  // identity unsuffixed, transfer fields unsuffixed, and the remaining transaction fields
+  // carrying the `_tx` suffix. Without that the two sides collide on from_address,
+  // to_address and friends -- which is precisely why the CSV suffixes them.
+  //
+  // `input_tx` is omitted, as in the list endpoints: the explorer fetches calldata per
+  // row on demand.
+  //
+  // `value_tx` is omitted too; it is `value_lossless_tx` with a `.0` suffix and was
+  // dropped from the data model as a pure duplicate.
+  const columns = [
+    // shared identity, taken from the transaction side
+    `concat('0x', lower(hex(t.block_hash))) AS block_hash`,
+    't.block_number AS block_number',
+    'toString(t.block_timestamp) AS block_timestamp',
+    `concat('0x', lower(hex(t.transaction_hash))) AS transaction_hash`,
+    't.transaction_index AS transaction_index',
+    // transfer side -- NULL on a plain-transaction row thanks to join_use_nulls
+    'tr.event_index AS event_index',
+    'tr.batch_index AS batch_index',
+    `concat('0x', lower(hex(tr.address))) AS address`,
+    'tr.event_type AS event_type',
+    `concat('0x', lower(hex(tr.event_hash))) AS event_hash`,
+    'tr.event_signature AS event_signature',
+    `concat('0x', lower(hex(tr.operator_address))) AS operator_address`,
+    `concat('0x', lower(hex(tr.from_address))) AS from_address`,
+    `concat('0x', lower(hex(tr.to_address))) AS to_address`,
+    'toString(tr.token_id) AS token_id',
+    'toString(tr.quantity) AS quantity',
+    'tr.removed AS removed',
+    // transaction side
+    't.nonce AS nonce_tx',
+    `concat('0x', lower(hex(t.from_address))) AS from_address_tx`,
+    `concat('0x', lower(hex(t.to_address))) AS to_address_tx`,
+    'toString(t.value) AS value_lossless_tx',
+    't.gas AS gas_tx',
+    'toString(t.gas_price) AS gas_price_tx',
+    'toString(t.max_fee_per_gas) AS max_fee_per_gas_tx',
+    'toString(t.max_priority_fee_per_gas) AS max_priority_fee_per_gas_tx',
+    't.transaction_type AS type_tx',
+    't.chain_id AS chain_id_tx',
+    't.access_list AS access_list_tx',
+    `concat('0x', lower(hex(t.r))) AS r_tx`,
+    `concat('0x', lower(hex(t.s))) AS s_tx`,
+    'toString(t.v) AS v_tx',
+    'toString(t.y_parity) AS y_parity_tx',
+    'tr.transaction_hash IS NOT NULL AS is_token_transfer',
+  ].join(', ')
+
+  return {
+    sql:
+      `SELECT ${columns} ` +
+      'FROM transactions t LEFT JOIN token_transfers tr ' +
+      'ON t.block_number = tr.block_number AND t.transaction_index = tr.transaction_index ' +
+      `WHERE ${where.join(' AND ')} ` +
+      `ORDER BY ${keyColumns.join(', ')} LIMIT {limit:UInt32} ` +
+      // Unmatched rows come back as real NULLs rather than type defaults, so a plain
+      // transaction is distinguishable from a transfer whose fields happen to be zero.
+      'SETTINGS join_use_nulls = 1',
+    params,
+  }
+}
+
 /** One transaction by hash, through the hash lookup table. Includes calldata. */
 export function buildTxByHash(hash: string): BuiltQuery {
   return {

@@ -13,3 +13,6 @@ Thumbs.db
 # The browser-facing artifacts it produces (public/data/) are committed instead.
 /analytics_*.csv
 tokens.csv
+
+# Generated pipeline output (derived data, rebuildable from the source export).
+/data/parquet/

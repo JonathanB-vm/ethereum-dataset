@@ -190,26 +190,52 @@ export function buildAddressPage(
 ): BuiltQuery {
   const indexTable = table === 'transactions' ? 'tx_by_address' : 'transfers_by_address'
   const columns = sortColumnsFor(table)
-  const join = columns.map((c) => `f.${c} = i.${c}`).join(' AND ')
+  const key = `(${columns.join(', ')})`
 
-  const where = ['i.address = unhex({addr:String})']
+  const where = ['address = unhex({addr:String})']
   const params: Record<string, string | number> = { addr: address.slice(2), limit }
 
   if (cursor) {
-    const keyset = keysetPredicate(
-      cursor,
-      columns.map((c) => `i.${c}`),
-    )
+    const keyset = keysetPredicate(cursor, columns)
     where.push(keyset.sql)
     Object.assign(params, keyset.params)
   }
 
+  // The index table is read first and its result bounded to one page, then the fact table
+  // is read by primary key for exactly those keys.
+  //
+  // This was an INNER JOIN, which is the obvious formulation and is catastrophically
+  // wrong: ClickHouse builds its hash table from the right-hand side, so joining the fact
+  // table reads *all* of it. Measured on a replicated dataset, the join read 120% of the
+  // table per request while this form reads ~15% at the same size -- and the join's cost
+  // grows with the table, which is precisely what the address index exists to avoid.
+  const keySubquery =
+    `SELECT ${columns.join(', ')} FROM ${indexTable} ` +
+    `WHERE ${where.join(' AND ')} ` +
+    `ORDER BY ${columns.join(', ')} LIMIT {limit:UInt32}`
+
+  // `role` comes from the row itself rather than the index table, since the IN form does
+  // not carry the index's columns through. One difference from the join: a transaction
+  // that is both sender and recipient appeared twice before (once per index row) and now
+  // appears once, labelled `from`. One row per transaction is the better answer.
+  //
+  // Columns are table-qualified because the SELECT list aliases `from_address` and friends
+  // to their 0x hex rendering. Unqualified, the alias wins and the comparison comes out
+  // false for every row -- silently, since it is a legal comparison of a hex string to
+  // binary.
+  const q = `${table}.`
+  const roleExpr =
+    table === 'transactions'
+      ? `multiIf(${q}from_address = unhex({addr:String}), 'from', 'to')`
+      : `multiIf(${q}from_address = unhex({addr:String}), 'from', ` +
+        `${q}to_address = unhex({addr:String}), 'to', ` +
+        `${q}address = unhex({addr:String}), 'token', 'operator')`
+
   return {
     sql:
-      `SELECT ${listColumns(table, 'f.')}, i.role AS role ` +
-      `FROM ${indexTable} i INNER JOIN ${table} f ON ${join} ` +
-      `WHERE ${where.join(' AND ')} ` +
-      `ORDER BY ${columns.map((c) => `i.${c}`).join(', ')} LIMIT {limit:UInt32}`,
+      `SELECT ${listColumns(table)}, ${roleExpr} AS role FROM ${table} ` +
+      `WHERE ${key} IN (${keySubquery}) ` +
+      `ORDER BY ${columns.join(', ')} LIMIT {limit:UInt32}`,
     params,
   }
 }
@@ -316,12 +342,15 @@ export function buildRecordsPage(
 
 /** One transaction by hash, through the hash lookup table. Includes calldata. */
 export function buildTxByHash(hash: string): BuiltQuery {
+  // Two primary-key reads, not a join -- see the note in buildAddressPage. Measured on a
+  // replicated dataset, the join form read 110% of the transactions table for a single
+  // hash lookup; this reads under 10%.
   return {
     sql:
-      `SELECT ${listColumns('transactions', 'f.')}, f.input AS input ` +
-      'FROM tx_by_hash k INNER JOIN transactions f ' +
-      'ON f.block_number = k.block_number AND f.transaction_index = k.transaction_index ' +
-      'WHERE k.transaction_hash = unhex({tx_hash:String})',
+      `SELECT ${listColumns('transactions')}, input FROM transactions ` +
+      'WHERE (block_number, transaction_index) IN (' +
+      'SELECT block_number, transaction_index FROM tx_by_hash ' +
+      'WHERE transaction_hash = unhex({tx_hash:String}))',
     params: { tx_hash: hash.slice(2) },
   }
 }

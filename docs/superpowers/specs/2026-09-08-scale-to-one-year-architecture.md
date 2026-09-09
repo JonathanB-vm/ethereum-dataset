@@ -271,8 +271,14 @@ lossless 256-bit values.
   sample is still 20 minutes of one day, so it carries no seasonal or pre-merge variation.
 - **Source dataset column names** in `sql/export_block_range.sql` were written from memory;
   verify against the BigQuery schema tab before the first run.
-- **Source freshness.** The public dataset is refreshed by Google; if it lags, our head lags.
-  The ingest job must tolerate "nothing new" runs.
+- ~~**Source freshness.**~~ Largely resolved: measured 2026-09-09, the dataset's head block
+  was 25,939,422 at 11:09 UTC, roughly two hours behind wall clock — far fresher than the
+  daily cadence needs. The ingest job must still tolerate "nothing new" runs, and one
+  reading is not an SLA, so the lag alert stays.
+- **Coverage confirmed.** The dataset runs from block 0 to head, so the five-year milestone
+  needs no additional source. Block rate measured over the 405,222 blocks between the
+  sample and head: **12.04 s/block, ~2.62 M blocks/year**, against the 2.63 M this spec
+  assumed — a 0.4% difference, so every extrapolation here stands.
 - **Single server.** ClickHouse is rebuildable from R2, so the failure mode is downtime, not
   data loss. Enable R2 object versioning to protect the canonical layer.
 - **Signature columns**: keep or drop (decision needed from the research group).

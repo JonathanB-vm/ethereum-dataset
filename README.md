@@ -148,6 +148,12 @@ AWS Public Blockchain Data, era1) compared line by line with those specs is in
 Supporting files: `sql/export_block_range.sql` (draft BigQuery → Parquet export) and
 `scripts/measure-csv.mjs` (streaming sizing of any export CSV).
 
+A working slice of that design already runs locally, with no cloud account:
+`pipeline/repack.py` turns the export into canonical Parquet, `pipeline/clickhouse/`
+holds the schema and load, and `api/` serves the paged read API over it. See
+[`pipeline/README.md`](pipeline/README.md) to run the whole stack, and for what it does
+and does not prove.
+
 ## Testing
 
 `npm test` runs 274 unit tests across 31 Vitest suites covering the dictionary, CSV

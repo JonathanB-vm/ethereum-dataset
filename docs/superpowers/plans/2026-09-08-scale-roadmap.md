@@ -15,7 +15,7 @@ with automatic daily refresh from BigQuery.
 - [ ] Verify column names and the partition column of the three source tables in the BigQuery console; fix `sql/export_block_range.sql`. *(The BigQuery sandbox needs no credit card, and dry runs never scan, so this and the next item may both be free.)*
 - [ ] Dry-run the export query for one 10,000-block chunk and record `total_bytes_processed`.
 - [ ] **Decide: signature columns (`r`, `s`, `v`, `y_parity`) kept or dropped.** Measured at **76 GB/year, 28% of the footprint** — the largest storage lever in the project. Needs the research group.
-- [ ] Decide: hosting (dedicated server vs. ClickHouse Cloud vs. institutional server). Sizing input is settled: ~380 GB of ClickHouse disk for one year, ~1.4–1.9 TB for five.
+- [ ] Decide: hosting (dedicated server vs. ClickHouse Cloud vs. institutional server). Sizing input is settled by measurement: ~409 GB of ClickHouse disk for one year, ~1.6–2.1 TB for five, so ~450 GB of NVMe with merge headroom.
 - [ ] Decide: API language (TypeScript recommended).
 - [ ] Decide: 10,000 blocks per Parquet file (spec) vs 8,192 (era1 convention) vs 1,000 (cryo default).
 - [x] Decide: hex strings (spec, matches BigQuery/AWS) vs binary (cryo) in the published Parquet. *(Resolved by measurement: hex costs 270 GB/year vs 252 GB for binary — a 6.7% premium, ~$0.27/month on R2. **Keep hex**; pandas/DuckDB convenience is worth far more than 18 GB.)*
@@ -31,9 +31,13 @@ schema, the API and the frontend are all exercised for real before a single buck
 - [x] `pipeline/clickhouse/schema.sql` — fact tables, address index tables + MVs, `block_stats`, `ingest_log`.
 - [x] Load the local Parquet into a Docker ClickHouse; measure real on-disk size, compression ratio and skip-index size. *(Done: **409 GB/year** against the 380 GB projection. Found and fixed two schema bugs that only appear when the DDL is actually run — see `pipeline/clickhouse/`. Every derived structure verified against the fact tables. Latency targets remain unvalidated: 100 blocks fit in page cache.)*
 - [x] `pipeline/clickhouse/load.sql` — hex→binary and decimal-string→UInt256 casts; the local stand-in for the production `s3()` load.
-- [ ] Ingest job skeleton against a fake BigQuery client: chunking, `ingest_log`, idempotent retry, dry-run cost guard.
-- [ ] API service against local ClickHouse: endpoints, cursor pagination, caps, cache headers.
-- [ ] Frontend: new paged `DataProvider` interface, `apiProvider`, table in manual mode; CSV provider kept as the test double.
+- [x] Ingest planning and cost guard (`pipeline/planning.py`): finality lag, chunk alignment, month partitions, dry-run byte ceiling. 28 tests. *(The BigQuery client itself still needs an account.)*
+- [x] API service against local ClickHouse (`api/`): endpoints, cursor pagination, scope enforcement, caps, cache headers, rate-limit headers. 103 tests.
+- [x] `/v1/records`, the flat 35-column join — reconstructs the source CSV exactly (74,889 rows), proving the normalization is lossless.
+- [x] Frontend seam: `QueryProvider`, `ApiQueryProvider`, `MemoryQueryProvider`, and one contract suite over a recorded API fixture.
+- [x] `pipeline/README.md` — how to run the whole stack locally, and what it does and does not prove.
+- [ ] Rewire the UI: table in manual pagination/sorting/filtering mode, filters to query params, block picker, stats band from the API. Wants the API deployed to review against.
+- [ ] Ingest orchestration end to end (needs BigQuery, GCS and R2 credentials).
 
 ## M1 — One year, end to end (weeks)
 

@@ -7,20 +7,35 @@ Query draft: `sql/export_block_range.sql`
 
 ## Principles
 
-1. **Never scan a source table without a partition filter.** The source tables are
-   partitioned on `block_timestamp` — confirmed 2026-09-09 against the live
-   `INFORMATION_SCHEMA`, which also shows it is their sole clustering column. The
-   *granularity* is taken from the official schema page as **monthly** and is not yet
-   independently confirmed: BigQuery returns an empty `ddl` for a public dataset you do not
-   own, so the DDL route is closed. It is settled instead by measurement — compare the
-   dry-run estimate for a one-day filter against a one-month filter (`sql/verify_schema.sql`
-   queries 3 and 3c). Equal estimates mean monthly partitions; a ~31× smaller one means
-   daily, and the daily job is then far cheaper than budgeted here. Every query carries a `block_timestamp BETWEEN …` clause derived from
-   the block range, in addition to the `block_number` range. Because the partition is
-   monthly, one query touches at least one whole month of the selected columns, so
-   **the backfill exports one month per query**, not one chunk per query, and the daily
-   job re-reads the current month. This is the difference between under a dollar and
-   tens of dollars per run.
+1. **Never scan a source table without a time filter.** The source tables are partitioned
+   on `block_timestamp` and clustered on it too (both confirmed 2026-09-09 against the live
+   `INFORMATION_SCHEMA`). Every query carries a `block_timestamp BETWEEN …` clause derived
+   from the block range, in addition to the `block_number` range. This is the difference
+   between a few gigabytes and a full-table scan.
+
+   **A narrow time filter does prune — measured, and this corrected the spec.** Dry-run
+   estimates on `transactions`, same 21 columns: one month of August 2026 is **86.51 GB**,
+   one day is **3.51 GB**, a **24.6×** reduction. An earlier draft assumed a day-sized
+   filter could not prune below a whole month partition and budgeted the daily job at a
+   month's scan.
+
+   The measurement cannot distinguish daily partitions from monthly partitions whose
+   clustering prunes within them, and it does not need to: what the cost model depends on
+   is how many bytes a filter removes, and a day-sized filter removes ~96% of a month.
+   (Monthly-plus-clustering is the likelier reading — the official schema page says
+   monthly, clustering on `block_timestamp` is confirmed, and the measured day is 1.26× a
+   uniform 31st of the month, which is the approximate pruning clustering gives rather than
+   the exact partition boundary a daily partition would.)
+
+   The two jobs therefore want different windows:
+
+   - **Backfill: one query per calendar month.** Reading each month exactly once costs
+     0.94 TiB for a year of `transactions`, against 1.17 TiB for 365 day-sized queries —
+     monthly is ~19% cheaper, because clustering prunes slightly worse than proportionally.
+   - **Daily job: filter to the new blocks' time window only, never the whole month.** At
+     ~3.5 GB a day instead of 86.5 GB, this is the single largest cost saving in the
+     pipeline and it takes the recurring BigQuery bill to zero.
+
 2. **Only finalized blocks.** The job targets `head − 100`. Post-merge finality is ~13
    minutes (64 slots); 100 blocks is ~20 minutes, so reorgs never reach us and there is no
    reorg-handling code.
@@ -91,10 +106,20 @@ month; the dry run reports the actual figure.
 
 | Run | Scanned | Cost |
 |---|---|---|
-| Daily, partition-pruned (re-reads the current month, both tables) | ~40–100 GB | ~$0.25–0.60 (≈ $10–20 / month; zero while inside the free 1 TiB) |
-| One-year backfill, one query per month | ~0.6–1.2 TB | ~$0–8 |
-| Five-year backfill | ~3–6 TB | ~$20–40 |
-| Any run without the `block_timestamp` filter | full tables, ~5.7 TB | ~$35 **per run** |
+| Daily, new day only (`transactions`, measured) | 3.51 GB | ~107 GB/month → **$0**, inside the free 1 TiB |
+| Daily, re-reading the whole month (the earlier plan) | 86.51 GB | ~2.4 TiB/month → ~$8.70 |
+| One-year backfill, one query per month (`transactions`) | 1,038 GB = 0.94 TiB | **$0** after the free tier |
+| One-year backfill, one query per day (`transactions`) | 1,281 GB = 1.17 TiB | ~$1.06 |
+| Any run without the `block_timestamp` filter | full tables, ~5.7 TB | ~$32 **per run** |
+
+Figures are `transactions` only, measured 2026-09-09 on August 2026 with the 21 columns
+the export actually selects. `token_transfers` is the smaller table and its own dry run is
+still outstanding; on the reported table sizes (1.60 TB against 4.08 TB) it should add
+roughly 40%, which leaves both the daily job and the backfill inside the free tier.
+
+**The recurring BigQuery line is therefore ~$0, not the $10–20/month first budgeted.**
+Cost only appears if the time filter is lost, which is exactly what the dry-run guard
+prevents.
 
 If the daily cost matters, run the job weekly instead: same freshness class for a
 research dataset, one-seventh of the scans.

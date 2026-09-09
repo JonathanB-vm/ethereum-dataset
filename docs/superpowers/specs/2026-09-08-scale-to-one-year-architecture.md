@@ -199,8 +199,8 @@ Prices verified 2026-09-08 (details and sources in the industry comparison doc).
 | Dedicated server (Hetzner AX52: Ryzen 7 7700, 64 GB, 2×1 TB NVMe ≈ €64 / month; AX102: 128 GB, 2×1.92 TB NVMe, quoted €122–259 / month, verify) or an institutional server | ~$70–130 / month | ~$150–280 / month, needs ≥ 3 TB NVMe |
 | R2 storage ($0.015 / GB-month, egress $0) | ~270 GB → ~$4 | ~1 TB → ~$15 |
 | Cloudflare CDN (free tier) | $0 | $0 |
-| BigQuery ingest (monthly partitions; the daily job re-reads the current month) | ~$10–20 / month, or ~$2 if run weekly | same |
-| **Total** | **~$85–155 / month** | **~$170–315 / month** |
+| BigQuery ingest (daily job filters to the new day only — measured, see the ingest spec) | **~$0**, inside the free 1 TiB / month | same |
+| **Total** | **~$75–135 / month** | **~$165–295 / month** |
 
 Alternative with less operations: ClickHouse Cloud. The Basic tier (~$186 / month 24×7,
 fixed 8 GB RAM / 2 vCPU) is **capped at 1 TB of storage and cannot scale**, so it fits one
@@ -208,11 +208,13 @@ year only just and five years not at all; the Scale tier starts around $499 / mo
 $25.30 / TB-month storage and $0.1152 / GB internet egress (exports out of ClickHouse Cloud
 are billed). An institutional server with NVMe drops the compute line to zero.
 
-One-time BigQuery backfill: ~0.6–1.2 TB scanned for one year (~$0–8 after the free
-1 TiB / month), ~3–6 TB for five years (~$20–40). The only budget hazard is a query without
-a partition filter: a full scan of the two source tables is ~5.7 TB, ~$35 per run, i.e.
-~$1,000 / month for a daily job. The ingest spec makes the partition filter mandatory and
-adds a dry-run byte ceiling.
+One-time BigQuery backfill, measured 2026-09-09: a year of `transactions` read one month
+per query is 1,038 GB (0.94 TiB), which the free 1 TiB / month covers outright;
+`token_transfers` should add roughly 40% and its own dry run is still outstanding. Five
+years is ~5× that, so a few dollars if spread across months. The only budget hazard is a
+query without a time filter: a full scan of the two source tables is ~5.7 TB, ~$32 per run,
+i.e. ~$1,000 / month for a daily job. The ingest spec makes the filter mandatory and adds a
+dry-run byte ceiling.
 
 ## Performance targets
 

@@ -99,6 +99,34 @@ The API integration tests need ClickHouse from step 2. Without it they report as
 server and hid a real bug, so they now resolve availability at module load and run in the
 `node` environment (jsdom cannot reach a local port).
 
+## 5. Scale test
+
+The sample is 100 blocks, which fits in memory, so nothing measured on it says anything
+about behaviour at a billion rows. `scaletest.py` closes part of that gap for free by
+replicating the sample into a separate database and measuring at increasing sizes.
+
+```bash
+python pipeline/scaletest.py --replicas 200 --checkpoints 25 50 100 200 --out data/scaletest.json
+```
+
+Two design points make the result meaningful rather than a toy:
+
+- **Cardinality is preserved.** Naive replication would repeat every address N times and
+  flatter both compression and the bloom filters. The *hot* addresses — tokens, routers,
+  exchanges, which genuinely recur — stay stable, while the long tail is perturbed per
+  replica, and transaction and block hashes are always perturbed.
+- **The metric is `read_rows`, not wall time.** The data still fits in page cache on a
+  laptop, so timings here are optimistic and are not latency results. What survives the
+  caching is how much data ClickHouse had to touch: if a block-range query reads the same
+  number of rows whether the table holds 40 thousand or 17 million, the primary key is
+  doing its job. If it grows with the table, no hardware fixes that.
+
+This is what caught the API's worst bug. The hash and address endpoints joined the fact
+table to the index table, and ClickHouse builds a join's hash table from the right-hand
+side — so a single lookup read 110–120% of the transactions table, growing with the table,
+exactly where the index was supposed to help. The benchmark suite still runs the rejected
+JOIN form alongside the fixed one so the gap stays visible.
+
 ## What this proves
 
 - The normalized model is **lossless**: `/v1/records` reconstructs the source CSV exactly —

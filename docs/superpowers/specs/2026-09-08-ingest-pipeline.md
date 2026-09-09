@@ -33,8 +33,8 @@ Query draft: `sql/export_block_range.sql`
      0.94 TiB for a year of `transactions`, against 1.17 TiB for 365 day-sized queries —
      monthly is ~19% cheaper, because clustering prunes slightly worse than proportionally.
    - **Daily job: filter to the new blocks' time window only, never the whole month.** At
-     ~3.5 GB a day instead of 86.5 GB, this is the single largest cost saving in the
-     pipeline and it takes the recurring BigQuery bill to zero.
+     ~5 GB a day across both tables instead of ~126 GB, this is the single largest cost
+     saving in the pipeline and it takes the recurring BigQuery bill to zero.
 
 2. **Only finalized blocks.** The job targets `head − 100`. Post-merge finality is ~13
    minutes (64 slots); 100 blocks is ~20 minutes, so reorgs never reach us and there is no
@@ -106,20 +106,19 @@ month; the dry run reports the actual figure.
 
 | Run | Scanned | Cost |
 |---|---|---|
-| Daily, new day only (`transactions`, measured) | 3.51 GB | ~107 GB/month → **$0**, inside the free 1 TiB |
-| Daily, re-reading the whole month (the earlier plan) | 86.51 GB | ~2.4 TiB/month → ~$8.70 |
-| One-year backfill, one query per month (`transactions`) | 1,038 GB = 0.94 TiB | **$0** after the free tier |
-| One-year backfill, one query per day (`transactions`) | 1,281 GB = 1.17 TiB | ~$1.06 |
+| Daily, new day only (both tables) | ~5.1 GB | ~156 GB/month → **$0**, inside the free 1 TiB |
+| Daily, re-reading the whole month (the earlier plan) | 126.2 GB | ~3.8 TiB/month → ~$17 |
+| One-year backfill, one query per month (both tables) | 1,515 GB = 1.38 TiB | **$0** if spread over two months; ~$2.36 if run inside one |
+| Five-year backfill | ~7.6 TiB | ~$10–40 depending on how it is spread |
 | Any run without the `block_timestamp` filter | full tables, ~5.7 TB | ~$32 **per run** |
 
-Figures are `transactions` only, measured 2026-09-09 on August 2026 with the 21 columns
-the export actually selects. `token_transfers` is the smaller table and its own dry run is
-still outstanding; on the reported table sizes (1.60 TB against 4.08 TB) it should add
-roughly 40%, which leaves both the daily job and the backfill inside the free tier.
+Measured 2026-09-09 on August 2026, with the columns the export actually selects:
+`transactions` 86.51 GB per month and 3.51 GB per day; `token_transfers` 39.72 GB per
+month, 46% of `transactions`, so ~1.6 GB per day. Day-sized figures for `token_transfers`
+are scaled from that ratio rather than separately measured.
 
-**The recurring BigQuery line is therefore ~$0, not the $10–20/month first budgeted.**
-Cost only appears if the time filter is lost, which is exactly what the dry-run guard
-prevents.
+**The recurring BigQuery line is ~$0, not the $10–20/month first budgeted.** Cost only
+appears if the time filter is lost, which is exactly what the dry-run guard prevents.
 
 If the daily cost matters, run the job weekly instead: same freshness class for a
 research dataset, one-seventh of the scans.

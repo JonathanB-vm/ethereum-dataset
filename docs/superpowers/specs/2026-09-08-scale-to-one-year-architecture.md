@@ -208,10 +208,11 @@ year only just and five years not at all; the Scale tier starts around $499 / mo
 $25.30 / TB-month storage and $0.1152 / GB internet egress (exports out of ClickHouse Cloud
 are billed). An institutional server with NVMe drops the compute line to zero.
 
-One-time BigQuery backfill, measured 2026-09-09: a year of `transactions` read one month
-per query is 1,038 GB (0.94 TiB), which the free 1 TiB / month covers outright;
-`token_transfers` should add roughly 40% and its own dry run is still outstanding. Five
-years is ~5× that, so a few dollars if spread across months. The only budget hazard is a
+One-time BigQuery backfill, measured 2026-09-09: a year read one month per query is
+1,515 GB (1.38 TiB) across both tables — `transactions` 86.51 GB per month and
+`token_transfers` 39.72 GB — which the free 1 TiB / month covers outright if the backfill
+spans two calendar months, and costs ~$2.36 if squeezed into one. Five years is ~5× that,
+so tens of dollars at worst. The only budget hazard is a
 query without a time filter: a full scan of the two source tables is ~5.7 TB, ~$32 per run,
 i.e. ~$1,000 / month for a daily job. The ingest spec makes the filter mandatory and adds a
 dry-run byte ceiling.

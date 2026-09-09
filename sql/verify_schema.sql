@@ -157,19 +157,25 @@ FROM `bigquery-public-data.blockchain_analytics_ethereum_mainnet_us.blocks`
 WHERE block_timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 2 DAY);
 
 -- ---------------------------------------------------------------------------
--- 5. What do the STRING-typed numeric columns actually look like?
+-- 5. What do the STRING-typed numeric columns actually look like? Run this.
 --
 --    v, y_parity, quantity, token_id and value_lossless are all STRING in the source.
 --    How they are *formatted* decides how the pipeline parses them, and getting it wrong
 --    fails silently: try_cast('0x1' AS UBIGINT) is NULL, not an error, so `v` would
 --    quietly become empty for every row.
 --
---    Expect either hex ('0x1', '0x1b') or decimal ('1', '27'). Cheap: one small block
---    range, five columns.
+--    Expect either hex ('0x1', '0x1b') or decimal ('1', '27'). value_lossless is expected
+--    to be a plain decimal string; quantity and token_id live on token_transfers and are
+--    already known to be decimal from the CSV export.
+--
+--    NOTE: filter on time only. An earlier version of this query also carried a
+--    block_number range taken from a linear blocks-per-day extrapolation, and the two
+--    windows did not overlap -- it returned no rows at all. Block numbers derived from a
+--    rate estimate drift by days over a month; never AND them with a date window unless
+--    the numbers came from the data itself. Scans one day (~3.5 GB), inside the free tier.
 -- ---------------------------------------------------------------------------
-SELECT v, y_parity, value_lossless
+SELECT v, y_parity, value_lossless, transaction_type
 FROM `bigquery-public-data.blockchain_analytics_ethereum_mainnet_us.transactions`
-WHERE block_timestamp >= TIMESTAMP('2026-07-14')
-  AND block_timestamp <  TIMESTAMP('2026-07-16')
-  AND block_number BETWEEN 25534200 AND 25534210
+WHERE block_timestamp >= TIMESTAMP('2026-08-14')
+  AND block_timestamp <  TIMESTAMP('2026-08-15')
 LIMIT 20;

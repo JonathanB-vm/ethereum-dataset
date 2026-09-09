@@ -206,15 +206,32 @@ ENGINE = ReplacingMergeTree
 PARTITION BY intDiv(block_number, 1000000)
 ORDER BY (address, block_number, transaction_index, role);
 
-CREATE MATERIALIZED VIEW tx_by_address_mv TO tx_by_address AS
-SELECT from_address AS address, block_number, transaction_index, 'from' AS role FROM transactions
-UNION ALL
-SELECT to_address, block_number, transaction_index, 'to' FROM transactions WHERE to_address IS NOT NULL;
+-- One view per role. A UNION ALL body does NOT work here -- see the warning below.
+CREATE MATERIALIZED VIEW tx_by_address_from_mv TO tx_by_address AS
+SELECT from_address AS address, block_number, transaction_index, 'from' AS role
+FROM transactions;
+
+CREATE MATERIALIZED VIEW tx_by_address_to_mv TO tx_by_address AS
+SELECT to_address AS address, block_number, transaction_index, 'to' AS role
+FROM transactions WHERE to_address IS NOT NULL;
 ```
 
-The same pattern yields `transfers_by_address` (roles `from`, `to`, `token`, `operator`)
-and `tx_by_hash` (`transaction_hash → block_number, transaction_index`). A lookup is two
-primary-key reads: index table, then the fact table by `(block_number, transaction_index)`.
+> **A materialized view fires on one source table, so only the first branch of a
+> `UNION ALL` ever runs.** An earlier draft of this spec wrote each index table as a single
+> view with a `UNION ALL` per role. Loaded against a real ClickHouse that produced 40,642
+> rows, *all* of them `role='from'`, and none for `role='to'` — no error, no warning. The
+> failure is invisible until someone asks "which transactions went **to** this address?"
+> and gets an empty page. Split into one view per role, all pointing `TO` the same table.
+
+The same pattern yields `transfers_by_address` (roles `from`, `to`, `token`, `operator` —
+four views) and `tx_by_hash` (`transaction_hash → block_number, transaction_index`). A
+lookup is two primary-key reads: index table, then the fact table by
+`(block_number, transaction_index)`.
+
+Measured on the 100-block load: `tx_by_address` costs **13.4 bytes per row** and
+`transfers_by_address` **10.1 bytes per row**, comfortably under the ~30 bytes this spec
+assumed. `tx_by_hash` is the expensive one at 37 bytes per row (a 32-byte hash does not
+compress), ~40 GB per year. All three index tables together are 25% of the on-disk total.
 
 ### Materialized aggregates (the stats band)
 
@@ -222,22 +239,34 @@ primary-key reads: index table, then the fact table by `(block_number, transacti
 CREATE TABLE block_stats
 (
     block_number      UInt32,
-    block_timestamp   DateTime,
-    tx_count          UInt32,
-    transfer_count    UInt32,
-    erc20_count       UInt32,
-    erc721_count      UInt32,
-    erc1155_count     UInt32,
-    eth_moved         UInt256,      -- sum of transactions.value
-    gas_price_min     UInt128,
-    gas_price_max     UInt128,
+    block_timestamp   SimpleAggregateFunction(any, DateTime),
+    tx_count          SimpleAggregateFunction(sum, UInt64),
+    transfer_count    SimpleAggregateFunction(sum, UInt64),
+    erc20_count       SimpleAggregateFunction(sum, UInt64),
+    erc721_count      SimpleAggregateFunction(sum, UInt64),
+    erc1155_count     SimpleAggregateFunction(sum, UInt64),
+    eth_moved         SimpleAggregateFunction(sum, UInt256),   -- sum of transactions.value
+    gas_price_min     SimpleAggregateFunction(min, UInt128),
+    gas_price_max     SimpleAggregateFunction(max, UInt128),
     addresses_state   AggregateFunction(uniq, FixedString(20))
 )
 ENGINE = AggregatingMergeTree
 ORDER BY block_number;
 ```
 
-Fed by materialized views on both fact tables. A year is 2.63 M rows here, so any
+> Every non-key column must be an aggregate type. An earlier draft declared these as plain
+> `UInt32`/`UInt256`/`UInt128`, which ClickHouse **rejects outright**: on a background merge
+> rows sharing the sorting key collapse and plain columns keep an arbitrary value, so a
+> retried chunk load would silently corrupt the stats band. `SimpleAggregateFunction` keeps
+> the columns readable as ordinary values while making the merge correct.
+
+Fed by one materialized view per fact table, each emitting a partial row per block that the
+engine merges. Both views must emit the **identity element** for the aggregates they do not
+own, not zero: a `0` written into `gas_price_min` by the transfers view wins every `min()`
+and permanently zeroes the block's real minimum. Verified on the 100-block load — every
+counter, the 23-digit `eth_moved` wei sum and `gas_price_min` match the fact tables exactly.
+
+A year is 2.63 M rows here, so any
 block-range or day-range stat (`sum`, `min`, `max`, `uniqMerge`) answers in milliseconds.
 The explorer's stats band and the dictionary's per-column stats (fill rate, distinct
 counts, min/max) read from this table or from a nightly `column_stats` refresh, never from

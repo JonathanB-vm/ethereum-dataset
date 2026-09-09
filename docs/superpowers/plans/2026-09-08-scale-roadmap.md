@@ -29,7 +29,8 @@ schema, the API and the frontend are all exercised for real before a single buck
 
 - [x] `pipeline/repack.py` — flat CSV → three normalized tables → sorted, zstd, checksummed Parquet + manifest.
 - [x] `pipeline/clickhouse/schema.sql` — fact tables, address index tables + MVs, `block_stats`, `ingest_log`.
-- [ ] Load the local Parquet into a Docker ClickHouse; measure real on-disk size, compression ratio and skip-index size against the ~380 GB/year projection.
+- [x] Load the local Parquet into a Docker ClickHouse; measure real on-disk size, compression ratio and skip-index size. *(Done: **409 GB/year** against the 380 GB projection. Found and fixed two schema bugs that only appear when the DDL is actually run — see `pipeline/clickhouse/`. Every derived structure verified against the fact tables. Latency targets remain unvalidated: 100 blocks fit in page cache.)*
+- [x] `pipeline/clickhouse/load.sql` — hex→binary and decimal-string→UInt256 casts; the local stand-in for the production `s3()` load.
 - [ ] Ingest job skeleton against a fake BigQuery client: chunking, `ingest_log`, idempotent retry, dry-run cost guard.
 - [ ] API service against local ClickHouse: endpoints, cursor pagination, caps, cache headers.
 - [ ] Frontend: new paged `DataProvider` interface, `apiProvider`, table in manual mode; CSV provider kept as the test double.

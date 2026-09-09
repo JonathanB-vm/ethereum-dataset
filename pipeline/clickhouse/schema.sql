@@ -109,10 +109,17 @@ ENGINE = ReplacingMergeTree
 PARTITION BY intDiv(block_number, 1000000)
 ORDER BY (address, block_number, transaction_index, role);
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS eth.tx_by_address_mv TO eth.tx_by_address AS
+-- One materialized view per role, not one view with a UNION ALL.
+--
+-- A materialized view is an insert trigger on a single source table, and with a UNION ALL
+-- body only the first branch ever fires -- verified here: loading 40,642 transactions
+-- through the UNION ALL version produced 40,642 rows, all role='from', and none for 'to'.
+-- Nothing errors; address lookups just silently return no results for the missing roles.
+CREATE MATERIALIZED VIEW IF NOT EXISTS eth.tx_by_address_from_mv TO eth.tx_by_address AS
 SELECT from_address AS address, block_number, transaction_index, 'from' AS role
-FROM eth.transactions
-UNION ALL
+FROM eth.transactions;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS eth.tx_by_address_to_mv TO eth.tx_by_address AS
 SELECT to_address AS address, block_number, transaction_index, 'to' AS role
 FROM eth.transactions
 WHERE to_address IS NOT NULL;
@@ -130,20 +137,28 @@ ENGINE = ReplacingMergeTree
 PARTITION BY intDiv(block_number, 1000000)
 ORDER BY (address, block_number, transaction_index, event_index, batch_index, role);
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS eth.transfers_by_address_mv
+CREATE MATERIALIZED VIEW IF NOT EXISTS eth.transfers_by_address_from_mv
 TO eth.transfers_by_address AS
 SELECT from_address AS address, block_number, transaction_index, event_index, batch_index,
        'from' AS role
-FROM eth.token_transfers
-UNION ALL
-SELECT to_address, block_number, transaction_index, event_index, batch_index, 'to'
-FROM eth.token_transfers
-UNION ALL
-SELECT address, block_number, transaction_index, event_index, batch_index, 'token'
-FROM eth.token_transfers
-UNION ALL
-SELECT operator_address, block_number, transaction_index, event_index, batch_index,
-       'operator'
+FROM eth.token_transfers;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS eth.transfers_by_address_to_mv
+TO eth.transfers_by_address AS
+SELECT to_address AS address, block_number, transaction_index, event_index, batch_index,
+       'to' AS role
+FROM eth.token_transfers;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS eth.transfers_by_address_token_mv
+TO eth.transfers_by_address AS
+SELECT address, block_number, transaction_index, event_index, batch_index,
+       'token' AS role
+FROM eth.token_transfers;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS eth.transfers_by_address_operator_mv
+TO eth.transfers_by_address AS
+SELECT operator_address AS address, block_number, transaction_index, event_index,
+       batch_index, 'operator' AS role
 FROM eth.token_transfers
 WHERE operator_address IS NOT NULL;
 
@@ -166,22 +181,66 @@ SELECT transaction_hash, block_number, transaction_index FROM eth.transactions;
 -- milliseconds and never touches the fact tables.
 -- ---------------------------------------------------------------------------
 
+-- Every non-key column must be an aggregate type. The data-model spec declared these as
+-- plain UInt32/UInt256/UInt128, which ClickHouse rejects outright: on a background merge
+-- rows sharing the sorting key collapse and plain columns keep an arbitrary value, so a
+-- retried chunk load would silently corrupt the stats band. SimpleAggregateFunction keeps
+-- the columns readable as plain values while making the merge correct, and lets both
+-- feeding views write partial rows for the same block.
 CREATE TABLE IF NOT EXISTS eth.block_stats
 (
     block_number      UInt32,
-    block_timestamp   DateTime,
-    tx_count          UInt32,
-    transfer_count    UInt32,
-    erc20_count       UInt32,
-    erc721_count      UInt32,
-    erc1155_count     UInt32,
-    eth_moved         UInt256,
-    gas_price_min     UInt128,
-    gas_price_max     UInt128,
+    block_timestamp   SimpleAggregateFunction(any, DateTime),
+    tx_count          SimpleAggregateFunction(sum, UInt64),
+    transfer_count    SimpleAggregateFunction(sum, UInt64),
+    erc20_count       SimpleAggregateFunction(sum, UInt64),
+    erc721_count      SimpleAggregateFunction(sum, UInt64),
+    erc1155_count     SimpleAggregateFunction(sum, UInt64),
+    eth_moved         SimpleAggregateFunction(sum, UInt256),
+    gas_price_min     SimpleAggregateFunction(min, UInt128),
+    gas_price_max     SimpleAggregateFunction(max, UInt128),
     addresses_state   AggregateFunction(uniq, FixedString(20))
 )
 ENGINE = AggregatingMergeTree
 ORDER BY block_number;
+
+-- Two feeding views. Each emits a partial row per block; the engine merges them, so
+-- `tx_count` comes from one and `transfer_count` from the other without either
+-- overwriting the block's other half. Unique addresses are a uniq state so the two
+-- sources can be combined without double-counting an address that appears in both.
+CREATE MATERIALIZED VIEW IF NOT EXISTS eth.block_stats_tx_mv TO eth.block_stats AS
+SELECT
+    block_number,
+    any(block_timestamp)          AS block_timestamp,
+    count()                       AS tx_count,
+    toUInt64(0)                   AS transfer_count,
+    toUInt64(0)                   AS erc20_count,
+    toUInt64(0)                   AS erc721_count,
+    toUInt64(0)                   AS erc1155_count,
+    sum(value)                    AS eth_moved,
+    min(gas_price)                AS gas_price_min,
+    max(gas_price)                AS gas_price_max,
+    uniqState(from_address)       AS addresses_state
+FROM eth.transactions
+GROUP BY block_number;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS eth.block_stats_transfer_mv TO eth.block_stats AS
+SELECT
+    block_number,
+    any(block_timestamp)                                  AS block_timestamp,
+    toUInt64(0)                                           AS tx_count,
+    count()                                               AS transfer_count,
+    countIf(event_type = 'ERC-20')                        AS erc20_count,
+    countIf(event_type = 'ERC-721')                       AS erc721_count,
+    countIf(event_type = 'ERC-1155')                      AS erc1155_count,
+    toUInt256(0)                                          AS eth_moved,
+    -- Identity elements, not zeros: a 0 here would win every min() and permanently
+    -- zero out the block's real minimum gas price.
+    toUInt128('340282366920938463463374607431768211455')  AS gas_price_min,
+    toUInt128(0)                                          AS gas_price_max,
+    uniqState(from_address)                               AS addresses_state
+FROM eth.token_transfers
+GROUP BY block_number;
 
 -- ---------------------------------------------------------------------------
 -- Ingest log: the idempotency guard, the manifest source, and the explorer's

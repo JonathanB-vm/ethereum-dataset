@@ -47,7 +47,7 @@ on every transfer row. Event mix over the 100 blocks: 43,595 ERC-20, 292 ERC-721
 | Token transfers | ~1.16 B rows | ~4.4–5.7 B rows |
 | Flat CSV, uncompressed | ~58 TB | ~220–285 TB |
 | Normalized Parquet + zstd | **270 GB (measured)** | ~1.0–1.4 TB |
-| ClickHouse on disk (incl. indexes, MVs) | ~380 GB | ~1.4–1.9 TB |
+| ClickHouse on disk (incl. indexes, MVs) | **409 GB (measured)** | ~1.6–2.1 TB |
 
 The five-year row is an over-estimate: it applies today's 406 transactions per block to
 blocks going back to 2021, when per-block activity was materially lower. Treat it as a
@@ -81,6 +81,33 @@ The two open decisions in the roadmap are therefore worth very different amounts
 versus binary is a 6.7% question and the spec's answer (hex, for pandas compatibility)
 stands cheaply. Signatures are a 28% question — by far the largest storage lever left, and
 the one that decides between a 1 TB and a 2 TB disk at five-year scale.
+
+### ClickHouse on disk (measured on a local server)
+
+The full schema was created on a ClickHouse 26.8 container and loaded from the Parquet
+above — no cloud account, no hosting decision required first.
+
+| Table | On disk | Rows | Compression |
+|---|---|---|---|
+| `transactions` | 8.83 MiB | 40,642 | 4.76× |
+| `token_transfers` | 1.86 MiB | 43,941 | 5.81× |
+| `tx_by_hash` | 1.44 MiB | 40,642 | 1.02× |
+| `transfers_by_address` | 1.27 MiB | 131,877 | 3.06× |
+| `tx_by_address` | 1.04 MiB | 81,257 | 2.01× |
+| `block_stats` | 235 KiB | 100 | — |
+| **total (incl. skip indexes and marks)** | **14.84 MiB / 100 blocks** | | |
+
+That is **409 GB per year**, against the 380 GB projected from the Parquet size — the
+derived structures cost slightly more than assumed. The three address/hash index tables are
+25% of the total, and `tx_by_hash` is the priciest per row (37 bytes) because a 32-byte
+hash does not compress. Skip indexes are cheap: 153 KiB across both fact tables.
+
+A one-year server therefore needs ~450 GB of NVMe with headroom for merges, and five years
+~2 TB. Both sit comfortably inside the hardware already priced below.
+
+**What this does not prove.** 100 blocks fit entirely in page cache, so the latency targets
+in this spec remain unvalidated — they need a real backfill. What is validated is the
+schema, the load path, the storage ratio and the correctness of every derived structure.
 
 **What the re-measurement changed.** The flat CSV is 3.4× larger per block than the
 single-block draft assumed, but the *compressed* figure — the one that sets the storage

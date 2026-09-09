@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { cacheHeadersFor, FINALITY_LAG, IMMUTABLE, isFinalized, NEAR_HEAD } from './caching'
-import type { Scope } from './scope'
+import { cacheHeadersFor, FINALITY_LAG, IMMUTABLE, isFinalized, NEAR_HEAD } from './caching.ts'
+import type { Scope } from './scope.ts'
 
 const HEAD = 25_534_299
 const range = (from: number, to: number): Scope => ({ kind: 'range', from, to })

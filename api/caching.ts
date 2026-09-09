@@ -10,7 +10,7 @@
  * Spec: docs/superpowers/specs/2026-09-08-api-and-frontend.md
  */
 
-import type { Scope } from './scope'
+import type { Scope } from './scope.ts'
 
 /** Blocks this far behind head are final; see the ingest spec. */
 export const FINALITY_LAG = 100
@@ -45,7 +45,9 @@ export function cacheHeadersFor(
   head: number,
   release?: string,
 ): CacheHeaders {
-  if (!isFinalized(scope, head)) {
+  // Only a range can be proven final, so this doubles as the narrowing that lets the
+  // ETag reference its bounds.
+  if (scope.kind !== 'range' || !isFinalized(scope, head)) {
     return { 'Cache-Control': NEAR_HEAD }
   }
   const headers: CacheHeaders = { 'Cache-Control': IMMUTABLE }

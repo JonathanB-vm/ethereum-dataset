@@ -8,7 +8,7 @@ import {
   parseScope,
   resolveLimit,
   ScopeError,
-} from './scope'
+} from './scope.ts'
 
 const ADDRESS = '0xdac17f958d2ee523a2206206994597c13d831ec7'
 const HASH = '0xa1f85713792f2d9c10d14079d4b2990ea0d72cbe35c95d28d377fe17073d6d35'

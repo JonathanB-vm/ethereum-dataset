@@ -22,12 +22,14 @@ export interface QuerySpec {
 }
 
 export class ClickHouseError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
+  // Declared rather than a constructor parameter property: the project builds with
+  // erasableSyntaxOnly, which forbids syntax that emits runtime code.
+  readonly status: number
+
+  constructor(message: string, status: number) {
     super(message)
     this.name = 'ClickHouseError'
+    this.status = status
   }
 }
 

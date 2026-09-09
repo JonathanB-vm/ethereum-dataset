@@ -15,8 +15,8 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { ClickHouseClient } from './clickhouse'
-import { decodeCursor, encodeCursor, type Cursor } from './cursor'
+import { ClickHouseClient } from './clickhouse.ts'
+import { decodeCursor, encodeCursor, type Cursor } from './cursor.ts'
 import {
   buildAddressPage,
   buildHead,
@@ -25,8 +25,8 @@ import {
   buildTxByHash,
   sortKeyOf,
   type Table,
-} from './queries'
-import type { Scope } from './scope'
+} from './queries.ts'
+import type { Scope } from './scope.ts'
 
 // Ground truth for the loaded sample, cross-checked against the source CSV.
 const FIRST_BLOCK = 25_534_200

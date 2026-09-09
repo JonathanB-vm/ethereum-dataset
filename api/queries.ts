@@ -9,8 +9,8 @@
  * Spec: docs/superpowers/specs/2026-09-08-api-and-frontend.md
  */
 
-import { keysetPredicate, type Cursor, type SortKey } from './cursor'
-import type { Scope } from './scope'
+import { keysetPredicate, type Cursor, type SortKey } from './cursor.ts'
+import type { Scope } from './scope.ts'
 
 export type Table = 'transactions' | 'token_transfers'
 

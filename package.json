@@ -12,7 +12,9 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "api": "node api/server.ts",
+    "test:api": "vitest run api"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.17.0",
@@ -28,6 +30,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "fastify": "^5.12.3",
     "jsdom": "^24.0.0",
     "oxlint": "^1.71.0",
     "typescript": "~6.0.2",

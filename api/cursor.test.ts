@@ -5,7 +5,7 @@ import {
   InvalidCursorError,
   keysetPredicate,
   type Cursor,
-} from './cursor'
+} from './cursor.ts'
 
 const TX_CURSOR: Cursor = {
   key: { block_number: 25_534_200, transaction_index: 17 },

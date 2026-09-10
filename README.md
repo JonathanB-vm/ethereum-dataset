@@ -160,7 +160,11 @@ and does not prove.
 
 ## Testing
 
-`npm test` runs 274 unit tests across 31 Vitest suites covering the dictionary, CSV
+`npm test` runs 434 tests across 38 Vitest suites covering the dictionary, CSV
 parsing and row validation, gzip decoding, the dataset-prep helpers, the calldata
 provider, BigInt transforms, dataset/column stats, filter functions, debounced search,
-pagination ranges, column definitions, and CSV export.
+pagination ranges, column definitions, CSV export, and the API query layer and paged
+provider seam. 45 of them need a local ClickHouse and report as *skipped* without one.
+
+`cd pipeline && python -m pytest` runs 52 more covering ingest planning, the BigQuery
+cost guard, and the repack step's value parsing.

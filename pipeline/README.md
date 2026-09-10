@@ -89,12 +89,12 @@ Configuration is environment-only: `CLICKHOUSE_URL`, `CLICKHOUSE_DB`, `CLICKHOUS
 ## 4. Tests
 
 ```bash
-npm test                              # 407 tests, including the API and provider contract
+npm test                              # 434 tests, incl. API and provider contract
 npm run test:api                      # API only
-cd pipeline && python -m pytest       # 28 planning and cost-guard tests
+cd pipeline && python -m pytest       # 52 planning, cost-guard and parsing tests
 ```
 
-The API integration tests need ClickHouse from step 2. Without it they report as
+The API integration tests need ClickHouse from step 2. Without it 45 of the 434 report as
 **skipped**, never as passed — an earlier version of them passed vacuously against a live
 server and hid a real bug, so they now resolve availability at module load and run in the
 `node` environment (jsdom cannot reach a local port).

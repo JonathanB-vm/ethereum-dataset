@@ -1,27 +1,52 @@
 import type { EthRecord } from './types'
+import { resolveCreator, VARIABLES, type User } from '../../registry/registry'
 
 /**
- * Every field the *dataset* has — which is two more than `EthRecord` carries. `input_tx`
- * is documented here but never held in memory (see `availability` below), and
- * `normalized_quantity` is never on the wire at all — it's computed in the browser — so
- * neither is a key of `EthRecord`.
+ * A research variable's column id (its registry id). Branded so a plain string literal
+ * still has to be a real dataset field: only `variableField()` mints one.
  */
-export type DictionaryField = keyof EthRecord | 'input_tx' | 'normalized_quantity'
+export type VariableField = string & { readonly __variableField: true }
+
+export function variableField(id: string): VariableField {
+  return id as VariableField
+}
+
+/**
+ * Every field the *dataset* has — which is more than `EthRecord` carries. `input_tx`
+ * is documented here but never held in memory (see `availability` below),
+ * `normalized_quantity` is never on the wire at all — it's computed in the browser — and
+ * research variables are precomputed per transaction and joined on from their own
+ * artifact, so none of them is a key of `EthRecord`.
+ */
+export type DictionaryField = keyof EthRecord | 'input_tx' | 'normalized_quantity' | VariableField
+
+/** Provenance shown for a research variable: who defined it, when, and how it is computed. */
+export interface VariableInfo {
+  createdBy: User
+  createdAt: string
+  tags: string[]
+  formula: string
+  version: number
+}
 
 export interface ColumnMeta {
   field: DictionaryField
   label: string
   description: string
-  source: 'token_transfers' | 'transactions' | 'both' | 'derived'
+  source: 'token_transfers' | 'transactions' | 'both' | 'derived' | 'variable'
   kind: 'hex' | 'address' | 'number' | 'bignum' | 'timestamp' | 'enum' | 'boolean' | 'text'
   /**
    * `'loaded'` — the value is on every `EthRecord` in memory.
    * `'on-demand'` — documented, but fetched per row through `CalldataProvider`.
    * `'derived'` — not in the dataset at all; computed in the browser from other fields.
+   * `'variable'` — a research variable: precomputed per transaction, read through the
+   * `VariableValues` lookup (src/data/variableValues.ts).
    * Anything that reads a value off a live record must iterate `LOADED_COLUMNS`, not
-   * `COLUMNS` — neither of the latter two has a value to read.
+   * `COLUMNS` — none of the latter three has a value to read.
    */
-  availability: 'loaded' | 'on-demand' | 'derived'
+  availability: 'loaded' | 'on-demand' | 'derived' | 'variable'
+  /** Research variables only. */
+  variable?: VariableInfo
 }
 
 /** A dictionary entry whose field really is present on `EthRecord`. */
@@ -67,6 +92,22 @@ export const COLUMNS: ColumnMeta[] = [
   { field: 'v_tx', label: 'Sig v', description: 'ECDSA signature v.', source: 'transactions', kind: 'hex', availability: 'loaded' },
   { field: 'y_parity_tx', label: 'Sig y-parity', description: 'ECDSA signature y_parity.', source: 'transactions', kind: 'hex', availability: 'loaded' },
   { field: 'is_token_transfer', label: 'Token Transfer?', description: 'Indicates whether the row represents a token transfer or a non-token transaction.', source: 'derived', kind: 'boolean', availability: 'loaded' },
+  ...VARIABLES.map((v): ColumnMeta => ({
+    field: variableField(v.id),
+    label: v.label,
+    description: v.description ?? '',
+    source: 'variable',
+    // A 0/1 flag filters as a two-option checkbox list, like the boolean columns.
+    kind: 'enum',
+    availability: 'variable',
+    variable: {
+      createdBy: resolveCreator(v),
+      createdAt: v.created_at,
+      tags: v.tags ?? [],
+      formula: v.formula.summary,
+      version: v.version,
+    },
+  })),
 ]
 
 /**
@@ -77,6 +118,9 @@ export const COLUMNS: ColumnMeta[] = [
 export const LOADED_COLUMNS: LoadedColumnMeta[] = COLUMNS.filter(
   (c): c is LoadedColumnMeta => c.availability === 'loaded',
 )
+
+/** Every research variable's dictionary entry, in registry order. */
+export const VARIABLE_COLUMNS: ColumnMeta[] = COLUMNS.filter((c) => c.availability === 'variable')
 
 const byField = new Map(COLUMNS.map((c) => [c.field as string, c]))
 

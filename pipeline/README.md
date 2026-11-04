@@ -69,6 +69,23 @@ docker exec eth-ch clickhouse-client --query "
   FROM system.parts WHERE database='eth' AND active GROUP BY table ORDER BY size DESC"
 ```
 
+### Compute the research variables
+
+```bash
+npm run variables:compute -- --from 25534200 --to 25534299
+```
+
+```
+catalog         2 variables upserted
+simple_transaction      40,642 rows, 6,358 ones
+from_high_user          40,642 rows, 2,895 ones
+```
+
+This upserts `registry/variables.json` into `eth.variables` and runs each
+`pipeline/variables/<id>.sql` over the range. Reruns replace rows rather than adding them.
+The counts match the explorer's `public/data/variable-values.json.gz`, and an integration
+test checks that every transaction agrees.
+
 ## 3. Run the API
 
 ```bash
@@ -81,6 +98,8 @@ curl 'http://localhost:3001/v1/stats?block_from=25534200&block_to=25534299'
 curl 'http://localhost:3001/v1/records?block_from=25534200&block_to=25534200&limit=5'
 curl 'http://localhost:3001/v1/addresses/0xdac17f958d2ee523a2206206994597c13d831ec7/transfers?limit=5'
 curl -i 'http://localhost:3001/v1/transactions'   # 400: every query must be bounded
+curl 'http://localhost:3001/v1/variables?tag=flag'
+curl 'http://localhost:3001/v1/transactions?block_from=25534200&block_to=25534200&limit=5&variables=simple_transaction,from_high_user'
 ```
 
 Configuration is environment-only: `CLICKHOUSE_URL`, `CLICKHOUSE_DB`, `CLICKHOUSE_USER`,
@@ -89,12 +108,13 @@ Configuration is environment-only: `CLICKHOUSE_URL`, `CLICKHOUSE_DB`, `CLICKHOUS
 ## 4. Tests
 
 ```bash
-npm test                              # 434 tests, incl. API and provider contract
+npm test                              # 489 tests, incl. API and provider contract
 npm run test:api                      # API only
 cd pipeline && python -m pytest       # 52 planning, cost-guard and parsing tests
 ```
 
-The API integration tests need ClickHouse from step 2. Without it 45 of the 434 report as
+The API integration tests need ClickHouse from step 2, and the variable tests also need
+the computed variables. Without them 52 of the 489 report as
 **skipped**, never as passed — an earlier version of them passed vacuously against a live
 server and hid a real bug, so they now resolve availability at module load and run in the
 `node` environment (jsdom cannot reach a local port).

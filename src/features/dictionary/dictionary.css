@@ -476,3 +476,69 @@
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
+
+/* ---------- research variables ---------- */
+
+.dictionary-variable {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+}
+
+.dictionary-variable__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0;
+}
+
+.dictionary-variable__facts dt {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dictionary-variable__facts dd {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.dictionary-variable__formula {
+  margin: 10px 0 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.dictionary-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dictionary-tag {
+  padding: 1px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.dictionary-entry__provenance {
+  margin: -2px 0 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.dictionary-entry__provenance .dictionary-tags {
+  margin-top: 6px;
+}

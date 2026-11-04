@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Table } from '@tanstack/react-table'
-import { LOADED_COLUMNS } from '../../data/dictionary'
+import { LOADED_COLUMNS, VARIABLE_COLUMNS } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 import type { TabId } from '../table/Tabs'
-import { buildCsv, downloadCsv } from './exportCsv'
+import { buildCsv, downloadCsv, type DerivedCells } from './exportCsv'
 import { normalizeQuantity } from '../../data/transform'
 import { tokenDecimals, type TokenRegistry } from '../../data/tokenRegistry'
+import { EMPTY_VARIABLE_VALUES, type VariableValues } from '../../data/variableValues'
 import './export.css'
 
 interface ExportButtonProps {
@@ -15,9 +16,17 @@ interface ExportButtonProps {
   blockMin: number | null
   blockMax: number | null
   tokens: TokenRegistry
+  variableValues?: VariableValues
 }
 
-export function ExportButton({ table, tab, blockMin, blockMax, tokens }: ExportButtonProps) {
+export function ExportButton({
+  table,
+  tab,
+  blockMin,
+  blockMax,
+  tokens,
+  variableValues = EMPTY_VARIABLE_VALUES,
+}: ExportButtonProps) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -65,11 +74,19 @@ export function ExportButton({ table, tab, blockMin, blockMax, tokens }: ExportB
     // The exact, full-precision value — no thousands separators and no symbol, unlike the
     // on-screen cell. Display truncation must not reach the file: the export is meant to
     // re-import losslessly, the same rule the raw numeric columns follow.
-    const derived = {
+    // Research variables export their stored value (0/1 for a flag), and an empty cell for
+    // a transaction the variable wasn't computed for.
+    const derived: DerivedCells = {
       normalized_quantity: (r: EthRecord) => {
         const decimals = tokenDecimals(tokens, r.address)
         return decimals == null ? '' : (normalizeQuantity(r.quantity, decimals) ?? '')
       },
+    }
+    for (const meta of VARIABLE_COLUMNS) {
+      derived[meta.field] = (r: EthRecord) => {
+        const v = variableValues.get(meta.field, r)
+        return v == null ? '' : String(v)
+      }
     }
 
     const csv = buildCsv(records, fields, derived)

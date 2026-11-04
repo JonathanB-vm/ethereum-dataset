@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { COLUMNS, LOADED_COLUMNS, getColumnMeta, type ColumnMeta, type DictionaryField } from '../../data/dictionary'
+import {
+  COLUMNS,
+  LOADED_COLUMNS,
+  VARIABLE_COLUMNS,
+  getColumnMeta,
+  type ColumnMeta,
+  type DictionaryField,
+  type VariableInfo,
+} from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
+import { EMPTY_VARIABLE_VALUES, type VariableValues } from '../../data/variableValues'
 import { weiToEth, weiToGwei } from '../../data/transform'
 import { HUMAN_UNIT } from '../table/rowDetailFields'
-import { computeColumnStats } from './columnStats'
+import { computeColumnStats, type ColumnStats } from './columnStats'
 import { DictionaryPanelContext, useDictionaryPanel } from './dictionaryPanelContext'
 import { visibleSources, type SourceFilter } from './sourceFilter'
 import { exitDuration } from '../../theme/motion'
@@ -22,10 +31,16 @@ interface DictionaryPanelProviderProps {
    *  the active tab/filter state, so a field's numbers don't change depending on which tab
    *  happened to be open when its ⓘ was clicked. */
   records: EthRecord[]
+  /** Research-variable values, for those fields' live stats. Empty is valid. */
+  variableValues?: VariableValues
   children: ReactNode
 }
 
-export function DictionaryPanelProvider({ records, children }: DictionaryPanelProviderProps) {
+export function DictionaryPanelProvider({
+  records,
+  variableValues = EMPTY_VARIABLE_VALUES,
+  children,
+}: DictionaryPanelProviderProps) {
   const [state, setState] = useState<PanelState>(null)
   // True while the exit animation plays: the panel stays mounted (with `--closing`
   // classes) for `exitDuration()` before the state actually clears — an instant unmount
@@ -82,7 +97,13 @@ export function DictionaryPanelProvider({ records, children }: DictionaryPanelPr
     <DictionaryPanelContext.Provider value={value}>
       {children}
       {state && (
-        <DictionaryPanel records={records} field={state.field} onClose={close} closing={closing} />
+        <DictionaryPanel
+          records={records}
+          variableValues={variableValues}
+          field={state.field}
+          onClose={close}
+          closing={closing}
+        />
       )}
     </DictionaryPanelContext.Provider>
   )
@@ -136,6 +157,7 @@ function InfoIcon() {
 
 interface DictionaryPanelProps {
   records: EthRecord[]
+  variableValues?: VariableValues
   /** Set → single-column mode for this field. Unset → full mode, all 36 fields. */
   field?: DictionaryField
   onClose: () => void
@@ -148,6 +170,7 @@ const SOURCE_LABELS: Record<ColumnMeta['source'], string> = {
   transactions: 'Transactions',
   both: 'Both',
   derived: 'Derived',
+  variable: 'Research Variables',
 }
 
 // token_transfers → accent, transactions → positive, both/derived → muted, per the brief.
@@ -156,6 +179,7 @@ const SOURCE_BADGE_CLASS: Record<ColumnMeta['source'], string> = {
   transactions: 'source-badge--positive',
   both: 'source-badge--muted',
   derived: 'source-badge--muted',
+  variable: 'source-badge--accent',
 }
 
 // Section display order lives in sourceFilter.ts (ALL_SOURCES) — FullDictionary renders
@@ -212,7 +236,13 @@ function FillBar({ value }: { value: number }) {
   )
 }
 
-export function DictionaryPanel({ records, field, onClose, closing }: DictionaryPanelProps) {
+export function DictionaryPanel({
+  records,
+  variableValues = EMPTY_VARIABLE_VALUES,
+  field,
+  onClose,
+  closing,
+}: DictionaryPanelProps) {
   const closeBtnRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -283,9 +313,9 @@ export function DictionaryPanel({ records, field, onClose, closing }: Dictionary
         </div>
         <div className="dictionary-panel__body">
           {field && meta ? (
-            <FieldDetail field={field} meta={meta} records={records} />
+            <FieldDetail field={field} meta={meta} records={records} variableValues={variableValues} />
           ) : (
-            <FullDictionary records={records} />
+            <FullDictionary records={records} variableValues={variableValues} />
           )}
         </div>
       </div>
@@ -293,16 +323,29 @@ export function DictionaryPanel({ records, field, onClose, closing }: Dictionary
   )
 }
 
-function FieldDetail({ field, meta, records }: { field: DictionaryField; meta: ColumnMeta; records: EthRecord[] }) {
+function FieldDetail({
+  field,
+  meta,
+  records,
+  variableValues,
+}: {
+  field: DictionaryField
+  meta: ColumnMeta
+  records: EthRecord[]
+  variableValues: VariableValues
+}) {
   return (
     <div className="dictionary-field">
       <div className="dictionary-field__meta-row">
         <SourceBadge source={meta.source} />
-        <span className="dictionary-field__kind">{meta.kind}</span>
+        <span className="dictionary-field__kind">{meta.variable ? 'flag (0/1)' : meta.kind}</span>
       </div>
       <p className="dictionary-field__description">{meta.description}</p>
       <code className="dictionary-field__name">{field}</code>
-      {meta.availability === 'derived' ? (
+      {meta.variable && <VariableProvenance info={meta.variable} />}
+      {meta.availability === 'variable' ? (
+        <FieldStats field={field} records={records} read={(r) => variableValues.get(field, r)} />
+      ) : meta.availability === 'derived' ? (
         <p className="dictionary-field__unavailable">Computed in the browser — not a stored dataset column.</p>
       ) : meta.availability === 'on-demand' ? (
         // Live stats need the value on every record. This one isn't in memory (it is 97%
@@ -311,14 +354,58 @@ function FieldDetail({ field, meta, records }: { field: DictionaryField; meta: C
           Fetched on demand — not loaded in the browser. Expand a row to load it.
         </p>
       ) : (
-        <FieldStats field={field as keyof EthRecord} records={records} />
+        <FieldStats field={field} records={records} />
       )}
     </div>
   )
 }
 
-function FieldStats({ field, records }: { field: keyof EthRecord; records: EthRecord[] }) {
-  const stats = computeColumnStats(records, field)
+/** Who defined a research variable, when, its rule, and its tags. */
+function VariableProvenance({ info }: { info: VariableInfo }) {
+  return (
+    <div className="dictionary-variable">
+      <dl className="dictionary-variable__facts">
+        <div>
+          <dt>Created by</dt>
+          <dd>{info.createdBy.name}</dd>
+        </div>
+        <div>
+          <dt>Created</dt>
+          <dd>{info.createdAt}</dd>
+        </div>
+        <div>
+          <dt>Version</dt>
+          <dd>{info.version}</dd>
+        </div>
+      </dl>
+      <p className="dictionary-variable__formula">{info.formula}</p>
+      {info.tags.length > 0 && <TagList tags={info.tags} />}
+    </div>
+  )
+}
+
+function TagList({ tags }: { tags: string[] }) {
+  return (
+    <ul className="dictionary-tags" aria-label="Tags">
+      {tags.map((t) => (
+        <li key={t} className="dictionary-tag">
+          {t}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function FieldStats({
+  field,
+  records,
+  read,
+}: {
+  field: DictionaryField
+  records: EthRecord[]
+  read?: (record: EthRecord) => unknown
+}) {
+  const stats = computeColumnStats(records, field, read)
   return (
     <dl className="dictionary-stats">
       <div className="dictionary-stat">
@@ -337,7 +424,7 @@ function FieldStats({ field, records }: { field: keyof EthRecord; records: EthRe
         <div className="dictionary-stat">
           <dt className="dictionary-stat__label">Min</dt>
           <dd>
-            <StatValue field={field} raw={stats.min} />
+            <StatValue field={field as keyof EthRecord} raw={stats.min} />
           </dd>
         </div>
       )}
@@ -345,7 +432,7 @@ function FieldStats({ field, records }: { field: keyof EthRecord; records: EthRe
         <div className="dictionary-stat">
           <dt className="dictionary-stat__label">Max</dt>
           <dd>
-            <StatValue field={field} raw={stats.max} />
+            <StatValue field={field as keyof EthRecord} raw={stats.max} />
           </dd>
         </div>
       )}
@@ -357,15 +444,21 @@ function FieldStats({ field, records }: { field: keyof EthRecord; records: EthRe
 // speak the same vocabulary as the section badges they filter.
 const SOURCE_FILTERS: SourceFilter[] = ['both', 'token_transfers', 'transactions']
 
-function FullDictionary({ records }: { records: EthRecord[] }) {
+function FullDictionary({ records, variableValues }: { records: EthRecord[]; variableValues: VariableValues }) {
   // Toggle semantics: clicking the active filter deselects it (back to all sections),
   // so `null` — not a fourth "All" button — is the unfiltered state.
   const [sourceFilter, setSourceFilter] = useState<SourceFilter | null>(null)
   // 34 loaded fields × a full-dataset scan each — worth memoizing so re-renders of the open
   // panel (e.g. parent state changes) don't recompute every column's stats from scratch.
   const statsByField = useMemo(
-    () => new Map(LOADED_COLUMNS.map((c) => [c.field, computeColumnStats(records, c.field)])),
-    [records],
+    () =>
+      new Map<DictionaryField, ColumnStats>([
+        ...LOADED_COLUMNS.map((c) => [c.field, computeColumnStats(records, c.field)] as const),
+        ...VARIABLE_COLUMNS.map(
+          (c) => [c.field, computeColumnStats(records, c.field, (r) => variableValues.get(c.field, r))] as const,
+        ),
+      ]),
+    [records, variableValues],
   )
   return (
     <div className="dictionary-full">
@@ -396,7 +489,7 @@ function FullDictionary({ records }: { records: EthRecord[] }) {
             </div>
             <ul className="dictionary-group__list">
               {fields.map((c) => {
-                const stats = c.availability === 'loaded' ? statsByField.get(c.field as keyof EthRecord) : undefined
+                const stats = statsByField.get(c.field)
                 return (
                   <li key={c.field} className="dictionary-entry">
                     <div className="dictionary-entry__row">
@@ -404,6 +497,14 @@ function FullDictionary({ records }: { records: EthRecord[] }) {
                       <code className="dictionary-entry__field">{c.field}</code>
                     </div>
                     <p className="dictionary-entry__description">{c.description}</p>
+                    {c.variable && (
+                      <div className="dictionary-entry__provenance">
+                        <span>
+                          by {c.variable.createdBy.name} · {c.variable.createdAt}
+                        </span>
+                        <TagList tags={c.variable.tags} />
+                      </div>
+                    )}
                     {stats ? (
                       <FillBar value={stats.fillRate} />
                     ) : c.availability === 'derived' ? (

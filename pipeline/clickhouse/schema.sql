@@ -261,3 +261,53 @@ CREATE TABLE IF NOT EXISTS eth.ingest_log
 )
 ENGINE = ReplacingMergeTree(started_at)
 ORDER BY (chunk_start, table_name);
+
+-- ---------------------------------------------------------------------------
+-- Research variables: researcher-defined derived columns.
+--
+-- A variable is a formula over the fact tables whose result is one new column. Its
+-- definition lives in the catalog; its results live in one long table shared by every
+-- variable, so adding a variable is a catalog row plus an INSERT and never an ALTER TABLE.
+--
+-- The catalog is seeded from registry/variables.json by pipeline/variables/compute.ts,
+-- which then runs each formula (pipeline/variables/<id>.sql) over a block range. Creators
+-- are ids into registry/users.json -- a demo user list, so there is no users table yet.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS eth.variables
+(
+    id               String,
+    label            String,
+    description      String DEFAULT '',
+    tags             Array(LowCardinality(String)),
+    created_by       LowCardinality(String),
+    created_at       Date,
+    grain            LowCardinality(String),
+    value_type       LowCardinality(String),
+    formula_summary  String,
+    formula_sql      String,
+    version          UInt32
+)
+ENGINE = ReplacingMergeTree(version)
+ORDER BY id;
+
+-- One row per (variable, transaction). `value` is Float64 so the same table holds flags
+-- today and counts or ratios later. ReplacingMergeTree keyed on the full identity means
+-- recomputing a range replaces its rows rather than double-counting them -- the same
+-- guarantee the fact tables give a retried chunk load. `version` records which formula
+-- version produced the row, so a stale computation is detectable after a formula change.
+--
+-- Sorted by variable first: a page of the explorer asks for a handful of variables over a
+-- narrow block range, which is then one contiguous primary-key read per variable.
+CREATE TABLE IF NOT EXISTS eth.tx_variable_values
+(
+    variable_id        LowCardinality(String),
+    block_number       UInt32,
+    transaction_index  UInt16,
+    value              Float64,
+    version            UInt32,
+    computed_at        DateTime
+)
+ENGINE = ReplacingMergeTree(computed_at)
+PARTITION BY intDiv(block_number, 1000000)
+ORDER BY (variable_id, block_number, transaction_index);

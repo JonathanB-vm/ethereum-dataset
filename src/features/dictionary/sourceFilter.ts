@@ -10,15 +10,16 @@ import type { ColumnMeta } from '../../data/dictionary'
 export type SourceFilter = 'both' | 'token_transfers' | 'transactions'
 
 /** Section display order when unfiltered — mirrors DictionaryPanel's SOURCE_ORDER. */
-const ALL_SOURCES: ColumnMeta['source'][] = ['both', 'token_transfers', 'transactions', 'derived']
+const ALL_SOURCES: ColumnMeta['source'][] = ['both', 'token_transfers', 'transactions', 'derived', 'variable']
 
 /**
- * Which source sections a filter selection shows. 'both' includes the derived group:
- * its two fields (is_token_transfer, normalized_quantity) belong to neither record type
- * alone, so the shared view is the only filtered view where they aren't misleading.
+ * Which source sections a filter selection shows. 'both' includes the derived and
+ * research-variable groups: is_token_transfer and normalized_quantity belong to neither
+ * record type alone, and a variable's per-transaction value sits on every row of its
+ * transaction, so the shared view is the only filtered view where they aren't misleading.
  */
 export function visibleSources(filter: SourceFilter | null): ColumnMeta['source'][] {
   if (filter == null) return ALL_SOURCES
-  if (filter === 'both') return ['both', 'derived']
+  if (filter === 'both') return ['both', 'derived', 'variable']
   return [filter]
 }

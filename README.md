@@ -66,6 +66,10 @@ npm run preview   # serve the production build
   (`input_tx`) lazily through `CalldataProvider`, showing `Loading…` then the value; a
   plain value-transfer transaction resolves to `0x` without a network round-trip, since
   only transactions with real calldata are shipped as artifacts.
+- **Research variables** — researcher-defined derived columns, appended to every tab:
+  `simple_transaction` and `from_high_user`, both by Nir Chemaya (see **Research
+  variables** below). Each filters on its 0/1 value, sorts with uncomputed rows last, and
+  shows its creator, rule and tags in the data dictionary.
 - **Data dictionary** — a slide-over panel describing all 36 documented fields (source
   table, type, description) with live per-column stats: fill rate, distinct count,
   min/max. `input_tx` shows "Fetched on demand" instead of a fill-rate bar, since its
@@ -105,6 +109,54 @@ The script streams the source row by row — it is never held in memory — and:
 
 Fetching calldata relies on `DecompressionStream`, which requires Chrome 80+, Firefox
 113+, or Safari 16.4+.
+
+## Research variables
+
+A *research variable* is a calculation a researcher runs over the dataset, whose result is
+one new column. Each one is an object with a creator, an optional description and optional
+tags (for search and filtering once there are many), a version, and a formula. The first
+two:
+
+| Column | Rule | Created by |
+| --- | --- | --- |
+| `simple_transaction` | 1 if the transaction has exactly one token transfer, else 0 (no transfers → 0) | Nir Chemaya |
+| `from_high_user` | 1 if `from_address_tx` initiated **more than 10** transactions in blocks `[B − 7200, B − 1]`, else 0. B is the transaction's block; transactions earlier in block B are not counted | Nir Chemaya |
+
+Both are per transaction, so every row of a transaction carries the same value.
+
+**Caveat on `from_high_user`.** The window can only count blocks that are loaded. Within
+7,200 blocks of the start of the data it is truncated and biased toward 0. In the current
+100-block sample *every* window is truncated: the flag means "more than 10 transactions in
+the earlier blocks of this sample", not in a full day.
+
+Where things live:
+
+- `registry/variables.json` holds the definitions, and `registry/users.json` the users.
+  This is a demo list with no authentication, currently just Nir Chemaya.
+  `registry/registry.ts` holds the types and validation. Until a creation UI exists, these
+  files are the source of truth.
+- `pipeline/variables/<id>.sql` is the ClickHouse formula.
+  `npm run variables:compute -- --from N --to M` upserts the registry into the
+  `eth.variables` catalog and writes results into `eth.tx_variable_values`. That is one
+  long table for every variable, so adding a variable never needs an `ALTER TABLE`.
+- `scripts/variablesPrep.mjs` is the JavaScript reference implementation.
+  `npm run data:variables` writes `public/data/variable-values.json.gz` (14 KB) from
+  `rows.csv.gz`, and the explorer joins it onto rows by `(block_number, transaction_index)`.
+  An integration test checks that the SQL and the JavaScript agree on every transaction.
+- The API's `GET /v1/variables` (filters: `tag`, `q`, `created_by`) and `GET /v1/users`
+  serve the catalog. `?variables=a,b` on `/v1/transactions`, `/v1/transfers` and
+  `/v1/records` attaches values to each row.
+
+To add a variable:
+
+1. Add an entry to `registry/variables.json`, with `created_by` set to a user id.
+2. Write its formula in `pipeline/variables/<id>.sql`.
+3. Add its reference implementation to `IMPLEMENTATIONS` in `scripts/variablesPrep.mjs`.
+4. Run `npm run data:variables`. The column then appears in the explorer.
+5. Run `npm run variables:compute` against ClickHouse.
+
+Changing a formula means bumping `version`. The explorer drops values computed under an
+older version instead of showing them.
 
 ## Architecture
 
@@ -160,11 +212,12 @@ and does not prove.
 
 ## Testing
 
-`npm test` runs 434 tests across 38 Vitest suites covering the dictionary, CSV
+`npm test` runs 489 tests across 44 Vitest suites covering the dictionary, the variable
+registry and reference implementations, CSV
 parsing and row validation, gzip decoding, the dataset-prep helpers, the calldata
 provider, BigInt transforms, dataset/column stats, filter functions, debounced search,
 pagination ranges, column definitions, CSV export, and the API query layer and paged
-provider seam. 45 of them need a local ClickHouse and report as *skipped* without one.
+provider seam. 52 of them need a local ClickHouse and report as *skipped* without one.
 
 `cd pipeline && python -m pytest` runs 52 more covering ingest planning, the BigQuery
 cost guard, and the repack step's value parsing.

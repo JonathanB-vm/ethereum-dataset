@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest'
 import type { ReactElement } from 'react'
 import type { Column } from '@tanstack/react-table'
 import { columnDisplayLabel, getColumnsForTab } from './columns'
-import { LOADED_COLUMNS } from '../../data/dictionary'
+import { LOADED_COLUMNS, VARIABLE_COLUMNS } from '../../data/dictionary'
 import { EMPTY_TOKEN_REGISTRY } from '../../data/tokenRegistry'
+import { parseVariableValues } from '../../data/variableValues'
 import type { EthRecord } from '../../data/types'
 
 /** Every curated accessor column here is built with `helper.accessor(field, {...})`, which
@@ -22,16 +23,18 @@ function fields(defs: ReturnType<typeof getColumnsForTab>): string[] {
 }
 
 describe('getColumnsForTab', () => {
-  it("'all' returns exactly the 34 loaded dictionary columns, in CSV order", () => {
+  const VARIABLE_IDS = VARIABLE_COLUMNS.map((c) => c.field)
+
+  it("'all' returns the 34 loaded dictionary columns in CSV order, then the research variables", () => {
     const defs = getColumnsForTab('all', EMPTY_TOKEN_REGISTRY)
-    expect(defs).toHaveLength(34)
-    expect(fields(defs)).toEqual(LOADED_COLUMNS.map((c) => c.field))
+    expect(defs).toHaveLength(34 + VARIABLE_IDS.length)
+    expect(fields(defs)).toEqual([...LOADED_COLUMNS.map((c) => c.field), ...VARIABLE_IDS])
     expect(fields(defs)).not.toContain('input_tx')
   })
 
-  it("'transfers' returns the 10 curated transfer columns plus the derived Normalized Quantity column, in the spec'd order", () => {
+  it("'transfers' returns the 10 curated transfer columns plus the derived Normalized Quantity column, in the spec'd order, then the research variables", () => {
     const defs = getColumnsForTab('transfers', EMPTY_TOKEN_REGISTRY)
-    expect(defs).toHaveLength(11)
+    expect(defs).toHaveLength(11 + VARIABLE_IDS.length)
     expect(fields(defs)).toEqual([
       'block_timestamp',
       'block_number',
@@ -44,12 +47,13 @@ describe('getColumnsForTab', () => {
       'normalized_quantity',
       'token_id',
       'event_index',
+      ...VARIABLE_IDS,
     ])
   })
 
-  it("'transactions' returns the 11 curated transaction columns, in the spec'd order", () => {
+  it("'transactions' returns the 11 curated transaction columns, in the spec'd order, then the research variables", () => {
     const defs = getColumnsForTab('transactions', EMPTY_TOKEN_REGISTRY)
-    expect(defs).toHaveLength(11)
+    expect(defs).toHaveLength(11 + VARIABLE_IDS.length)
     expect(fields(defs)).toEqual([
       'block_timestamp',
       'block_number',
@@ -62,7 +66,26 @@ describe('getColumnsForTab', () => {
       'gas_tx',
       'nonce_tx',
       'type_tx',
+      ...VARIABLE_IDS,
     ])
+  })
+
+  it('reads each research variable from the values lookup, and undefined when not computed', () => {
+    const values = parseVariableValues({
+      blocks: [5],
+      txIndexes: [2],
+      versions: { simple_transaction: 1, from_high_user: 1 },
+      values: { simple_transaction: [1], from_high_user: [0] },
+    })
+    const def = getColumnsForTab('transactions', EMPTY_TOKEN_REGISTRY, values).find(
+      (d) => d.id === 'simple_transaction',
+    ) as { accessorFn: (r: EthRecord, i: number) => unknown; filterFn: unknown; sortUndefined: unknown }
+    const record = (block_number: number, transaction_index: number) =>
+      ({ block_number, transaction_index }) as EthRecord
+    expect(def.accessorFn(record(5, 2), 0)).toBe(1)
+    expect(def.accessorFn(record(5, 3), 0)).toBeUndefined()
+    expect(def.filterFn).toBe('enumMulti')
+    expect(def.sortUndefined).toBe('last')
   })
 
   it("attaches the 'bignum' sortingFn to quantity, token_id, value_lossless_tx, and gas_price_tx", () => {

@@ -1,8 +1,22 @@
-import { createColumnHelper, type ColumnDef, type HeaderContext, type SortingFn } from '@tanstack/react-table'
-import { getColumnMeta, LOADED_COLUMNS, type ColumnMeta, type DictionaryField } from '../../data/dictionary'
+import {
+  createColumnHelper,
+  type ColumnDef,
+  type HeaderContext,
+  type RowData,
+  type SortingFn,
+} from '@tanstack/react-table'
+import { initials } from '../../../registry/registry'
+import {
+  getColumnMeta,
+  LOADED_COLUMNS,
+  VARIABLE_COLUMNS,
+  type ColumnMeta,
+  type DictionaryField,
+} from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 import { compareNormalizedQuantity, compareNumericStrings } from '../../data/transform'
 import { lookupToken, tokenDecimals, type TokenRegistry } from '../../data/tokenRegistry'
+import { EMPTY_VARIABLE_VALUES, type VariableValues } from '../../data/variableValues'
 import { DictionaryInfoTrigger } from '../dictionary/DictionaryPanel'
 import { SortableHeader } from './SortableHeader'
 import { FilterControls, type RangeUnit } from './FilterControls'
@@ -28,6 +42,11 @@ import {
 declare module '@tanstack/table-core' {
   interface SortingFns {
     bignum: SortingFn<EthRecord>
+  }
+  // Per-column presentation hints DataTable reads when it renders <th>/<td>.
+  interface ColumnMeta<TData extends RowData, TValue> {
+    /** Added to the column's header and body cells. */
+    className?: string
   }
 }
 
@@ -133,6 +152,16 @@ function header(tab: TabId, field: DictionaryField, rangeUnit?: RangeUnit) {
     <div className="col-header-cell">
       <DictionaryInfoTrigger field={field} label={displayLabel} />
       <SortableHeader label={displayLabel} column={column} sortCount={table.getState().sorting.length} />
+      {meta?.variable && (
+        <span
+          className="col-header__creator"
+          title={`Created by ${meta.variable.createdBy.name}`}
+          aria-label={`Created by ${meta.variable.createdBy.name}`}
+          role="img"
+        >
+          {initials(meta.variable.createdBy.name)}
+        </span>
+      )}
       {isBlockAxis ? (
         <BlockTimeFilterControl table={table} label={displayLabel} />
       ) : (
@@ -379,6 +408,42 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
   }),
 ] as ColumnDef<EthRecord>[]
 
+// ---------- research variables (every tab) ----------
+
+/**
+ * One column per registered research variable, appended to every tab. Values are per
+ * transaction and live in the `values` lookup rather than on the record, so — like
+ * Normalized Quantity — the accessor closes over it.
+ *
+ * The accessor returns `undefined` for a transaction the variable wasn't computed for,
+ * which with `sortUndefined: 'last'` keeps those rows at the bottom in either direction
+ * (see normalizedQuantityColumn for why that can't be done in the comparator). The 0/1
+ * value is shown as-is, so the cell, the filter's checkbox labels and the CSV export all
+ * read the same.
+ *
+ * `meta.className` tints the whole column (header and cells, see table.css) so derived
+ * research columns read as distinct from the dataset's own; the header also carries the
+ * creator's initials (see `header()`).
+ */
+function variableColumns(tab: TabId, values: VariableValues): ColumnDef<EthRecord>[] {
+  return VARIABLE_COLUMNS.map((meta) =>
+    helper.accessor((r) => values.get(meta.field, r) ?? undefined, {
+      id: meta.field,
+      header: header(tab, meta.field),
+      cell: (info) => {
+        const v = info.getValue()
+        if (tab === 'all') return <RawCell value={v} />
+        return <BadgeCell label={v == null ? null : String(v)} />
+      },
+      // A flag's interesting end is 1, so the first click puts flagged rows on top.
+      sortDescFirst: true,
+      sortUndefined: 'last',
+      filterFn: 'enumMulti',
+      meta: { className: 'col--variable' },
+    }),
+  ) as ColumnDef<EthRecord>[]
+}
+
 // ---------- all-records tab ----------
 // Every one of the 34 loaded dictionary columns (`input_tx` is fetched per row — see
 // RowDetail), in CSV order, shown as raw (mono, truncated) values — this tab is the
@@ -398,16 +463,21 @@ const allColumns: ColumnDef<EthRecord>[] = LOADED_COLUMNS.map((meta) =>
 ) as ColumnDef<EthRecord>[]
 
 /**
- * `tokens` is only consumed by the transfers tab's derived Normalized Quantity column; the
- * other two tabs ignore it and still return their module-level constant arrays.
+ * `tokens` is only consumed by the transfers tab's derived Normalized Quantity column.
+ * `values` feeds the research-variable columns every tab ends with, so each call builds a
+ * fresh array — DataTable memoizes it on (tab, tokens, values).
  */
-export function getColumnsForTab(tab: TabId, tokens: TokenRegistry): ColumnDef<EthRecord>[] {
+export function getColumnsForTab(
+  tab: TabId,
+  tokens: TokenRegistry,
+  values: VariableValues = EMPTY_VARIABLE_VALUES,
+): ColumnDef<EthRecord>[] {
   switch (tab) {
     case 'transfers':
-      return transferColumns(tokens)
+      return [...transferColumns(tokens), ...variableColumns(tab, values)]
     case 'transactions':
-      return transactionColumns
+      return [...transactionColumns, ...variableColumns(tab, values)]
     case 'all':
-      return allColumns
+      return [...allColumns, ...variableColumns(tab, values)]
   }
 }

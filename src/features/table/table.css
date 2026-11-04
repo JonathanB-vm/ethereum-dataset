@@ -1226,3 +1226,45 @@ tr:hover .copy-btn,
   vertical-align: super;
   opacity: 0.75;
 }
+
+/* ---------- research-variable columns ---------- */
+
+/* Researcher-defined columns (columns.tsx variableColumns) carry an accent tint end to end,
+   so derived research reads as distinct from the dataset's own fields at a glance. The
+   header mix is against an opaque base because the header is sticky — a translucent tint
+   would let scrolled rows show through it. The body selectors are written to out-rank the
+   zebra and hover rules above (same specificity, stated later; hover one step stronger). */
+.data-table thead th.col--variable {
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-raised));
+}
+
+.data-table tbody tr td.col--variable {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.data-table tbody tr.data-row--even td.col--variable {
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+}
+
+.data-table tbody tr:hover td.col--variable {
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-inset));
+}
+
+/* The creator's initials, as a small avatar right after the column label. */
+.col-header__creator {
+  display: grid;
+  place-items: center;
+  flex: none;
+  align-self: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 4px;
+  border-radius: 50%;
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-on-accent);
+  background: var(--accent);
+  cursor: default;
+}

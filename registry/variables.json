@@ -1,0 +1,32 @@
+[
+  {
+    "id": "simple_transaction",
+    "label": "Simple Transaction",
+    "description": "Whether the transaction is simple: 1 if it contains exactly one token transfer, 0 otherwise. A transaction with no token transfers, or with two or more, is non-simple (0). Every row of a transaction carries the same value.",
+    "tags": ["transaction-structure", "token-transfers", "flag"],
+    "created_by": "nir-chemaya",
+    "created_at": "2026-11-04",
+    "grain": "transaction",
+    "value_type": "flag",
+    "version": 1,
+    "formula": {
+      "summary": "1 if count(token transfers with this transaction_hash) = 1, else 0.",
+      "sql": "pipeline/variables/simple_transaction.sql"
+    }
+  },
+  {
+    "id": "from_high_user",
+    "label": "High-Activity Sender",
+    "description": "Whether the transaction's sender (from_address_tx) is a high-activity user: 1 if that address initiated more than 10 transactions in the 7,200 blocks (about one day) before this transaction's block, 0 otherwise. Computed separately for each transaction. Caveat: the window can only count blocks that are loaded, so for transactions within 7,200 blocks of the start of the data it is truncated and the value is biased toward 0. In the current 100-block sample every window is truncated.",
+    "tags": ["address-activity", "sender", "rolling-window", "flag"],
+    "created_by": "nir-chemaya",
+    "created_at": "2026-11-04",
+    "grain": "transaction",
+    "value_type": "flag",
+    "version": 1,
+    "formula": {
+      "summary": "1 if count(transactions sent by from_address_tx in blocks [B − 7200, B − 1]) > 10, else 0, where B is this transaction's block. Transactions earlier in block B are not counted.",
+      "sql": "pipeline/variables/from_high_user.sql"
+    }
+  }
+]

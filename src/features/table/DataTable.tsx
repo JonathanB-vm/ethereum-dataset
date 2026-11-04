@@ -18,6 +18,7 @@ import { EmptyState } from '../../components/States'
 import { formatCount as fmt } from '../../data/transform'
 import type { BlockAxisEntry, EthRecord } from '../../data/types'
 import type { TokenRegistry } from '../../data/tokenRegistry'
+import { EMPTY_VARIABLE_VALUES, type VariableValues } from '../../data/variableValues'
 import { customSortingFns, getColumnsForTab } from './columns'
 import { customFilterFns, tableGlobalFilterFn } from './filters'
 import { FilterChips } from './FilterChips'
@@ -43,17 +44,31 @@ interface DataTableProps {
   onGlobalFilterChange: (value: string) => void
   /** Token decimals lookup, for the derived Normalized Quantity column. Empty is valid. */
   tokens: TokenRegistry
+  /** Research-variable values, for the variable columns every tab ends with. Empty is valid. */
+  variableValues?: VariableValues
 }
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100]
 const DEFAULT_PAGE_SIZE = 50
 
-export function DataTable({ records, tab, blockAxis, onTableReady, globalFilter, onGlobalFilterChange, tokens }: DataTableProps) {
+export function DataTable({
+  records,
+  tab,
+  blockAxis,
+  onTableReady,
+  globalFilter,
+  onGlobalFilterChange,
+  tokens,
+  variableValues = EMPTY_VARIABLE_VALUES,
+}: DataTableProps) {
   // The transfers tab now builds its column array per call (it closes over `tokens` for the
   // derived Normalized Quantity column), so this can no longer rely on the old module-level
   // constant identity — without the memo, every render would hand useReactTable a new
   // column array and reset its internal column state.
-  const columns = useMemo(() => getColumnsForTab(tab, tokens), [tab, tokens])
+  const columns = useMemo(
+    () => getColumnsForTab(tab, tokens, variableValues),
+    [tab, tokens, variableValues],
+  )
 
   const [sortingState, setSortingState] = useState<SortingState>([])
   const [paginationState, setPaginationState] = useState<PaginationState>({
@@ -212,7 +227,11 @@ export function DataTable({ records, tab, blockAxis, onTableReady, globalFilter,
                   const sorted = h.column.getIsSorted()
                   const ariaSort = sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : undefined
                   return (
-                    <th key={h.id} aria-sort={h.column.getCanSort() ? (ariaSort ?? 'none') : undefined}>
+                    <th
+                      key={h.id}
+                      className={h.column.columnDef.meta?.className}
+                      aria-sort={h.column.getCanSort() ? (ariaSort ?? 'none') : undefined}
+                    >
                       {h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}
                     </th>
                   )
@@ -266,13 +285,15 @@ export function DataTable({ records, tab, blockAxis, onTableReady, globalFilter,
                         </span>
                       </td>
                       {row.getVisibleCells().map((cell) => (
-                        <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                        <td key={cell.id} className={cell.column.columnDef.meta?.className}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
                       ))}
                     </tr>
                     {isExpanded && (
                       <tr className="row-detail-row">
                         <td colSpan={columns.length + 1}>
-                          <RowDetail record={row.original} tokens={tokens} />
+                          <RowDetail record={row.original} tokens={tokens} variableValues={variableValues} />
                         </td>
                       </tr>
                     )}
@@ -336,6 +357,7 @@ export function DataTable({ records, tab, blockAxis, onTableReady, globalFilter,
           onClose={closeRowFullscreen}
           closing={fullscreenClosing}
           tokens={tokens}
+          variableValues={variableValues}
         />
       )}
     </div>

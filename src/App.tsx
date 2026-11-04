@@ -5,6 +5,7 @@ import { ErrorState, LoadingState, MalformedNotice } from './components/States'
 import { csvProvider } from './data/csvProvider'
 import type { LoadResult } from './data/provider'
 import { EMPTY_TOKEN_REGISTRY, tokenRegistryProvider, type TokenRegistry } from './data/tokenRegistry'
+import { EMPTY_VARIABLE_VALUES, variableValuesProvider, type VariableValues } from './data/variableValues'
 import type { BlockAxisEntry, EthRecord } from './data/types'
 import { formatTimestamp } from './data/transform'
 import { StatsBand } from './features/stats/StatsBand'
@@ -66,6 +67,7 @@ function App() {
   const debouncedFilter = useDebouncedValue(globalFilter, 200)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [tokens, setTokens] = useState<TokenRegistry>(EMPTY_TOKEN_REGISTRY)
+  const [variableValues, setVariableValues] = useState<VariableValues>(EMPTY_VARIABLE_VALUES)
 
   // Task 13: table fullscreen mode. State lives here (not in DataTable/FullscreenToggle)
   // because it toggles a class on `.table-card`, which wraps both the toolbar (where the
@@ -178,6 +180,20 @@ function App() {
     }
   }, [])
 
+  // Research-variable values: the same enhancement-not-dependency contract as the token
+  // registry above, so a missing artifact leaves the variable columns showing dashes.
+  useEffect(() => {
+    let cancelled = false
+    variableValuesProvider()
+      .load()
+      .then((values) => {
+        if (!cancelled) setVariableValues(values)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const handleRetry = useCallback(() => setRetryToken((t) => t + 1), [])
 
   // ⌘K / Ctrl-K focuses the global search input from anywhere on the page.
@@ -223,7 +239,7 @@ function App() {
     // need the same context. `records` is the full loaded dataset (not `tabRecords`), so a
     // field's live stats don't change depending on which tab happened to be open when its
     // ⓘ was clicked.
-    <DictionaryPanelProvider records={state.result?.records ?? []}>
+    <DictionaryPanelProvider records={state.result?.records ?? []} variableValues={variableValues}>
       <div className="app-shell">
         <Header
           blockCount={stats?.blockCount ?? 0}
@@ -272,6 +288,7 @@ function App() {
                     blockMin={stats?.blockMin ?? null}
                     blockMax={stats?.blockMax ?? null}
                     tokens={tokens}
+                    variableValues={variableValues}
                   />
                 )}
                 {/* `!== 'off'` (not just 'on') so the collapse icon holds through the
@@ -290,6 +307,7 @@ function App() {
                 globalFilter={debouncedFilter}
                 onGlobalFilterChange={setGlobalFilter}
                 tokens={tokens}
+                variableValues={variableValues}
               />
             </div>
           )}

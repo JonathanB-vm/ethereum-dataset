@@ -10,12 +10,14 @@ import {
   weiToGwei,
 } from '../../data/transform'
 import { lookupToken, type TokenRegistry } from '../../data/tokenRegistry'
+import { EMPTY_VARIABLE_VALUES, type VariableValues } from '../../data/variableValues'
 import { CalldataField } from './CalldataField'
 import { GROUPS, HUMAN_UNIT } from './rowDetailFields'
 
 interface RowDetailProps {
   record: EthRecord
   tokens: TokenRegistry
+  variableValues?: VariableValues
 }
 
 // Human-readable conversion, keyed by field — only the fields the brief calls out (ETH for
@@ -50,9 +52,10 @@ function rawString(value: unknown): string | null {
  * see `getColumnMeta`'s `availability` — so it renders via `CalldataField`, which fetches
  * the value per row the moment it's expanded, instead of reading off `record`. The one
  * derived field (`normalized_quantity`) is likewise absent from `record`; it's computed
- * from `tokens`, the registry passed down from `DataTable`/`RowFullscreen`.
+ * from `tokens`, the registry passed down from `DataTable`/`RowFullscreen`. Research
+ * variables are read from `variableValues` the same way their table cells are.
  */
-export function RowDetail({ record, tokens }: RowDetailProps) {
+export function RowDetail({ record, tokens, variableValues = EMPTY_VARIABLE_VALUES }: RowDetailProps) {
   return (
     <div className="row-detail">
       {GROUPS.map((group) => (
@@ -68,6 +71,22 @@ export function RowDetail({ record, tokens }: RowDetailProps) {
                     txHash={record.transaction_hash}
                     label={meta.label}
                   />
+                )
+              }
+              if (meta?.availability === 'variable') {
+                const value = variableValues.get(field, record)
+                return (
+                  <div key={String(field)} className="row-detail__field">
+                    <span className="row-detail__field-label">{meta.label}</span>
+                    {value == null ? (
+                      <span className="row-detail__field-value row-detail__field-value--empty">–</span>
+                    ) : (
+                      <span className="row-detail__field-value">
+                        <span className="row-detail__field-raw">{value}</span>
+                      </span>
+                    )}
+                    <span className="row-detail__field-human">by {meta.variable?.createdBy.name}</span>
+                  </div>
                 )
               }
               // Derived fields have no value on the record — `record[field]` would be

@@ -31,6 +31,15 @@ import {
   ScopeError,
   type Scope,
 } from './scope.ts'
+import {
+  blockSpan,
+  buildVariableValues,
+  listVariables,
+  mergeVariableValues,
+  parseVariablesParam,
+  toResource,
+} from './variables.ts'
+import { getVariable, USERS } from '../registry/registry.ts'
 
 /** Blockscout's anonymous default; the row cap and timeout are the real protection. */
 export const RATE_LIMIT_ANONYMOUS = 300
@@ -49,6 +58,8 @@ interface PageQuery {
   cursor?: string
   limit?: string
   sort?: 'asc' | 'desc'
+  /** Comma-separated research-variable ids to attach to each row. Opt-in. */
+  variables?: string
 }
 
 export function buildServer(options: ServerOptions = {}): FastifyInstance {
@@ -94,6 +105,22 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     return reply.code(500).send({ error: 'internal', message: 'unexpected error' })
   })
 
+  /**
+   * Attaches the requested research variables to a page, with one extra read bounded by the
+   * page's own block span. A no-op when none were requested.
+   */
+  async function withVariables(
+    rows: Record<string, unknown>[],
+    ids: string[],
+  ): Promise<Record<string, unknown>[]> {
+    const span = blockSpan(rows)
+    if (ids.length === 0 || span === null) return rows
+    const values = await client.query<Parameters<typeof mergeVariableValues>[2][number]>(
+      buildVariableValues(ids, span.from, span.to),
+    )
+    return mergeVariableValues(rows, ids, values)
+  }
+
   function applyCache(reply: FastifyReply, scope: Scope, head: number) {
     for (const [k, v] of Object.entries(cacheHeadersFor(scope, head, release))) {
       reply.header(k, v)
@@ -111,6 +138,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     const limit = resolveLimit(query.limit, keyed)
     const cursor = query.cursor ? decodeCursor(query.cursor) : undefined
     const dir = query.sort === 'desc' ? 'desc' : 'asc'
+    const variableIds = parseVariablesParam(query.variables)
 
     const built =
       scope.kind === 'address'
@@ -126,7 +154,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
         ? encodeCursor({ key: sortKeyOf(rows[rows.length - 1], table), dir } as Cursor)
         : null
 
-    return { rows, nextCursor }
+    return { rows: await withVariables(rows, variableIds), nextCursor }
   }
 
   app.get('/v1/head', async (_req, reply) => {
@@ -151,6 +179,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     }
     const limit = resolveLimit(req.query.limit, hasKey(req))
     const cursor = req.query.cursor ? decodeCursor(req.query.cursor) : undefined
+    const variableIds = parseVariablesParam(req.query.variables)
     const rows = await client.query<Record<string, unknown>>(
       buildRecordsPage(scope.from, scope.to, limit, cursor),
     )
@@ -170,7 +199,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
             dir: 'asc',
           })
         : null
-    return { rows, nextCursor }
+    return { rows: await withVariables(rows, variableIds), nextCursor }
   })
 
   app.get<{ Params: { hash: string } }>('/v1/transactions/:hash', async (req, reply) => {
@@ -236,6 +265,29 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     if (hit.kind === 'block') return { kind: 'block', href: `/v1/blocks/${hit.value}` }
     return { kind: 'text', value: hit.value }
   })
+
+  /**
+   * The research-variable catalog. Read from the registry, so it needs no database.
+   * Optional filters: `tag` (exact), `q` (substring of id, label, description or tags),
+   * `created_by` (user id).
+   */
+  app.get<{ Querystring: { tag?: string; q?: string; created_by?: string } }>(
+    '/v1/variables',
+    async (req, reply) => {
+      reply.header('Cache-Control', 'public, max-age=300')
+      return { variables: listVariables(req.query) }
+    },
+  )
+
+  app.get<{ Params: { id: string } }>('/v1/variables/:id', async (req, reply) => {
+    const variable = getVariable(req.params.id)
+    if (!variable) return reply.code(404).send({ error: 'not_found', message: 'no such variable' })
+    reply.header('Cache-Control', 'public, max-age=300')
+    return toResource(variable)
+  })
+
+  /** Demo users (registry/users.json). There is no authentication behind them yet. */
+  app.get('/v1/users', async () => ({ users: USERS }))
 
   app.get('/health', async () => ({ ok: await client.ping() }))
 

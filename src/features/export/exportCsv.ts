@@ -15,8 +15,9 @@ function cellValue(record: EthRecord, field: string): string {
 }
 
 /**
- * Resolvers for columns that exist on screen but not on the record — currently only
- * `normalized_quantity`, which is computed from `quantity` and a token-decimals lookup.
+ * Resolvers for columns that exist on screen but not on the record — `normalized_quantity`,
+ * computed from `quantity` and a token-decimals lookup, and the research variables, read
+ * from their per-transaction values lookup.
  * Keyed by column id, which is what `getVisibleLeafColumns()` reports.
  */
 export type DerivedCells = Record<string, (record: EthRecord) => string>

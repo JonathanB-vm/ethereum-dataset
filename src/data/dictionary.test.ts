@@ -1,17 +1,24 @@
 import { describe, it, expect } from 'vitest'
-import { COLUMNS, LOADED_COLUMNS, getColumnMeta } from './dictionary'
+import { COLUMNS, LOADED_COLUMNS, VARIABLE_COLUMNS, getColumnMeta } from './dictionary'
+import { VARIABLES } from '../../registry/registry'
 
 describe('column dictionary', () => {
-  it('documents all 36 fields — 35 dataset columns in CSV order, plus one derived', () => {
-    expect(COLUMNS).toHaveLength(36)
+  it('documents 35 dataset columns in CSV order plus one derived, then the research variables', () => {
+    expect(COLUMNS).toHaveLength(36 + VARIABLES.length)
     expect(COLUMNS[0].field).toBe('block_hash')
     expect(COLUMNS[35].field).toBe('is_token_transfer')
+    expect(COLUMNS.slice(36).map((c) => c.field)).toEqual(VARIABLES.map((v) => v.id))
+  })
+
+  it('has no duplicate fields, so no variable id shadows a dataset column', () => {
+    const fields = COLUMNS.map((c) => c.field)
+    expect(new Set(fields).size).toBe(fields.length)
   })
 
   it('every column has a non-empty description and a source', () => {
     for (const c of COLUMNS) {
       expect(c.description.length).toBeGreaterThan(10)
-      expect(['token_transfers', 'transactions', 'both', 'derived']).toContain(c.source)
+      expect(['token_transfers', 'transactions', 'both', 'derived', 'variable']).toContain(c.source)
     }
   })
 
@@ -36,7 +43,7 @@ describe('column dictionary', () => {
 
   it('every column declares a valid availability', () => {
     for (const c of COLUMNS) {
-      expect(['loaded', 'on-demand', 'derived']).toContain(c.availability)
+      expect(['loaded', 'on-demand', 'derived', 'variable']).toContain(c.availability)
     }
   })
 
@@ -70,5 +77,20 @@ describe('normalized_quantity dictionary entry', () => {
   it('sits immediately after quantity in COLUMNS order', () => {
     const fields = COLUMNS.map((c) => c.field)
     expect(fields[fields.indexOf('quantity') + 1]).toBe('normalized_quantity')
+  })
+})
+
+describe('research variable entries', () => {
+  it('come from the registry with their creator, tags and formula', () => {
+    const meta = getColumnMeta('from_high_user')
+    expect(meta).toMatchObject({ source: 'variable', availability: 'variable', kind: 'enum' })
+    expect(meta?.variable?.createdBy.name).toBe('Nir Chemaya')
+    expect(meta?.variable?.tags).toContain('rolling-window')
+    expect(meta?.variable?.formula).toMatch(/7200/)
+  })
+
+  it('are listed in VARIABLE_COLUMNS and kept out of LOADED_COLUMNS', () => {
+    expect(VARIABLE_COLUMNS.map((c) => c.field)).toEqual(['simple_transaction', 'from_high_user'])
+    expect(LOADED_COLUMNS.map((c) => c.field)).not.toContain('simple_transaction')
   })
 })

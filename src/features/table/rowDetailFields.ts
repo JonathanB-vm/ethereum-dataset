@@ -1,4 +1,4 @@
-import type { DictionaryField } from '../../data/dictionary'
+import { VARIABLE_COLUMNS, type DictionaryField } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 
 /**
@@ -17,7 +17,8 @@ export interface FieldGroup {
   fields: DictionaryField[]
 }
 
-// All 36 dictionary fields, partitioned into the brief's three groups. Order within each
+// Every dictionary field: the 36 dataset fields partitioned into the brief's three groups,
+// plus a fourth holding the research variables, generated from the registry. Order within each
 // group follows COLUMNS' own CSV order. Every field in `dictionary.ts` appears exactly
 // once across the three arrays — enforced by `RowDetail.test.ts`, which asserts
 // `GROUPS.flatMap(g => g.fields)` is length- and set-equal to `COLUMNS.map(c => c.field)`
@@ -45,6 +46,10 @@ export const GROUPS: FieldGroup[] = [
       'input_tx', 'max_fee_per_gas_tx', 'max_priority_fee_per_gas_tx', 'access_list_tx',
       'r_tx', 's_tx', 'v_tx', 'y_parity_tx',
     ],
+  },
+  {
+    title: 'Research Variables',
+    fields: VARIABLE_COLUMNS.map((c) => c.field),
   },
 ]
 

@@ -9,6 +9,8 @@
     "build": "tsc -b && vite build",
     "data:prep": "node scripts/prepare-dataset.mjs",
     "data:tokens": "node scripts/prepare-tokens.mjs tokens.csv",
+    "data:variables": "node scripts/prepare-variables.mjs",
+    "variables:compute": "node pipeline/variables/compute.ts",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",

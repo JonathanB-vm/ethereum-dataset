@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { EthRecord } from '../../data/types'
 import { truncateHex } from '../../data/transform'
 import type { TokenRegistry } from '../../data/tokenRegistry'
+import type { VariableValues } from '../../data/variableValues'
 import { RowDetail } from './RowDetail'
 
 interface RowFullscreenProps {
@@ -12,6 +13,7 @@ interface RowFullscreenProps {
   /** Threaded straight through to RowDetail, so the promoted view can't disagree with the
    *  inline expanded row it was opened from. */
   tokens: TokenRegistry
+  variableValues?: VariableValues
 }
 
 /**
@@ -27,7 +29,7 @@ interface RowFullscreenProps {
  * this renders with role="dialog", App.tsx's table-fullscreen Escape handler already
  * defers to it: one Esc closes this, the next exits table fullscreen.
  */
-export function RowFullscreen({ record, onClose, closing, tokens }: RowFullscreenProps) {
+export function RowFullscreen({ record, onClose, closing, tokens, variableValues }: RowFullscreenProps) {
   const closeBtnRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -94,7 +96,7 @@ export function RowFullscreen({ record, onClose, closing, tokens }: RowFullscree
         </button>
       </div>
       <div className="row-fullscreen__body">
-        <RowDetail record={record} tokens={tokens} />
+        <RowDetail record={record} tokens={tokens} variableValues={variableValues} />
       </div>
     </div>
   )

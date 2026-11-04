@@ -1,4 +1,4 @@
-import { getColumnMeta } from '../../data/dictionary'
+import { getColumnMeta, type DictionaryField } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 import { compareNumericStrings } from '../../data/transform'
 
@@ -22,15 +22,22 @@ export interface ColumnStats {
  * min/max use `compareNumericStrings` (BigInt-based, never `Number`/`parseFloat`) so a
  * 256-bit value like `value_lossless_tx` orders correctly and `'9' < '10'` numerically
  * rather than lexicographically.
+ *
+ * `read` supplies the value for a field that isn't on the record — a research variable,
+ * read through its values lookup. It defaults to reading `record[field]`.
  */
-export function computeColumnStats(records: EthRecord[], field: keyof EthRecord): ColumnStats {
+export function computeColumnStats(
+  records: EthRecord[],
+  field: DictionaryField,
+  read: (record: EthRecord) => unknown = (record) => record[field as keyof EthRecord],
+): ColumnStats {
   const total = records.length
   const distinctValues = new Set<string>()
   const numericValues: string[] = []
   let nonNullCount = 0
 
   for (const record of records) {
-    const value = record[field]
+    const value = read(record)
     if (value == null) continue
     nonNullCount++
     // Lowercase 'true'/'false' — an internal grouping key for this function's own distinct-

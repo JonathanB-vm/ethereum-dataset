@@ -166,10 +166,20 @@ to Cloudflare Pages shows none of it (see **Running it locally** below).
 
 1. **Sign in.** Google sign-in sets a session cookie. Anyone can browse without signing in;
    any Google account can submit requests. Admins come from `ADMIN_EMAILS`.
-2. **Propose.** The *Propose a variable* modal asks for a column name, label, description,
-   tags, a value type (flag or number), and one `SELECT` returning `block_number`,
-   `transaction_index` and `value`, filtered on `{block_from:UInt32}` and
-   `{block_to:UInt32}`. The server wraps it into the insert itself, so a request can never
+2. **Propose.** The *Propose a variable* modal asks for a column name, label, description
+   and tags, then the query, in one of two tabs. A searchable column browser sits beside
+   both: every readable table and column, with its type and meaning.
+   - **Build**: no SQL needed. Pick the rows (transactions, or token transfers combined per
+     transaction), what the value is (a yes/no flag, a count, a sum, or a column's value)
+     and conditions from dropdowns: ETH/Gwei amounts, addresses, categories and times, joined
+     with AND or OR. Clicking a column in the browser adds a condition on it. The builder
+     validates every value, writes the SQL, shows it with a plain-English summary, and
+     sets the value type.
+   - **SQL**: one `SELECT` returning `block_number`, `transaction_index` and `value`,
+     filtered on `{block_from:UInt32}` and `{block_to:UInt32}`. *Edit as SQL* carries a
+     built query over, and clicking a column inserts its name at the cursor.
+
+   Either way the server wraps the query into the insert itself, so a request can never
    write anything.
 3. **Estimate.** *Estimate cost* checks the query, then runs it twice on small samples (50
    and 100 blocks). Those runs are read-only (`readonly=2`) and capped on time, rows read
@@ -292,7 +302,7 @@ and does not prove.
 
 ## Testing
 
-`npm test` runs 566 tests across 50 Vitest suites covering the dictionary, the variable
+`npm test` runs 599 tests across 52 Vitest suites covering the dictionary, the variable
 registry and reference implementations, sign-in and sessions, request validation and
 cost estimation, the account UI, CSV
 parsing and row validation, gzip decoding, the dataset-prep helpers, the calldata

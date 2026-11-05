@@ -16,6 +16,8 @@ export function parseApiUrl(raw: string | undefined): string | undefined {
   return undefined
 }
 
+import type { SchemaTable } from './queryBuilder'
+
 export const API_URL: string | undefined = parseApiUrl(import.meta.env.VITE_API_URL)
 
 export interface AccountUser {
@@ -123,6 +125,7 @@ export const accountApi = {
   signOut: () => call<{ ok: boolean }>('/v1/auth/logout', { method: 'POST', body: {} }),
 
   template: () => call<{ query_sql: string }>('/v1/variable-requests/template').then((r) => r.query_sql),
+  schema: () => call<{ tables: SchemaTable[] }>('/v1/variable-requests/schema').then((r) => r.tables),
   estimate: (draft: Partial<RequestDraft>) =>
     call<{ estimate: Estimate }>('/v1/variable-requests/estimate', { method: 'POST', body: draft }).then((r) => r.estimate),
   submit: (draft: RequestDraft) =>

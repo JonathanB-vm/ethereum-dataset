@@ -61,51 +61,121 @@ const pending: VariableRequest = {
   createdAt: '2026-11-05 10:00:00',
 }
 
+// The API's schema for the builder and column browser: the live types of two tables.
+const SCHEMA_TABLES = [
+  {
+    name: 'transactions',
+    label: 'Transactions',
+    description: 'One row per transaction.',
+    columns: [
+      { name: 'block_number', type: 'UInt32', kind: 'number', nullable: false, description: 'Block the transaction is in.' },
+      { name: 'value', type: 'UInt256', kind: 'bignum', nullable: false, description: 'ETH sent with the transaction.', unit: 'wei' },
+      { name: 'gas', type: 'UInt64', kind: 'number', nullable: false, description: 'Gas limit the sender set.' },
+    ],
+  },
+  {
+    name: 'token_transfers',
+    label: 'Token transfers',
+    description: 'One row per transfer.',
+    columns: [{ name: 'event_type', type: 'LowCardinality(String)', kind: 'enum', nullable: false, description: 'Token standard.' }],
+  },
+]
+
+const modalRoutes = (extra: Record<string, Handler> = {}) => ({
+  'GET /v1/variable-requests/schema': () => ({ json: { tables: SCHEMA_TABLES } }),
+  'GET /v1/variable-requests/template': () => ({ json: { query_sql: 'SELECT block_number, transaction_index, 1 AS value' } }),
+  ...extra,
+})
+
 describe('ProposeVariableModal', () => {
-  it('prefills the query template, shows the measured estimate, and submits the form', async () => {
-    const calls = fakeApi({
-      'GET /v1/variable-requests/template': () => ({ json: { query_sql: 'SELECT block_number, transaction_index, 1 AS value' } }),
-      'POST /v1/variable-requests/estimate': () => ({ json: { estimate: ESTIMATE } }),
-      'POST /v1/variable-requests': (body) => ({ status: 201, json: { request: { ...pending, variableId: (body as { variable_id: string }).variable_id } } }),
-    })
+  it('builds a flag from a column picked in the list, shows it in words and SQL, and submits it', async () => {
+    const calls = fakeApi(
+      modalRoutes({
+        'POST /v1/variable-requests/estimate': () => ({ json: { estimate: ESTIMATE } }),
+        'POST /v1/variable-requests': () => ({ status: 201, json: { request: pending } }),
+      }),
+    )
     const onSubmitted = vi.fn()
     render(<ProposeVariableModal onClose={vi.fn()} onSubmitted={onSubmitted} />)
 
-    const sql = screen.getByRole('textbox', { name: /Query/ })
-    await waitFor(() => expect(sql).toHaveValue('SELECT block_number, transaction_index, 1 AS value'))
+    // Clicking a column in the browser adds a condition on it.
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a condition on: transactions.value' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Condition operator' }), { target: { value: 'gt' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value for value' }), { target: { value: '1' } })
+
+    expect(screen.getByText("1 if the transaction's value is greater than 1 ETH, otherwise 0.")).toBeInTheDocument()
+    expect(screen.getByLabelText('Generated SQL')).toHaveTextContent("toUInt8(value > toUInt256('1000000000000000000')) AS value")
 
     fireEvent.click(screen.getByRole('button', { name: 'Estimate cost' }))
     expect(await screen.findByText(/Moderate/)).toBeInTheDocument()
-    expect(screen.getByRole('table')).toHaveTextContent('2.6 M blocks')
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Column name' }), { target: { value: 'big_sender' } })
     fireEvent.change(screen.getByRole('textbox', { name: 'Label' }), { target: { value: 'Big Sender' } })
-    fireEvent.change(screen.getByRole('textbox', { name: /Tags/ }), { target: { value: 'value, sender' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Use as description' }))
     fireEvent.click(screen.getByRole('button', { name: 'Submit request' }))
 
     await waitFor(() => expect(onSubmitted).toHaveBeenCalled())
-    expect(calls.find((c) => c.key === 'POST /v1/variable-requests')?.body).toMatchObject({
+    const submitted = calls.find((c) => c.key === 'POST /v1/variable-requests')?.body as Record<string, string>
+    expect(submitted).toMatchObject({
       variable_id: 'big_sender',
-      label: 'Big Sender',
-      tags: ['value', 'sender'],
       value_type: 'flag',
+      description: "1 if the transaction's value is greater than 1 ETH, otherwise 0.",
     })
+    expect(submitted.query_sql).toContain('FROM transactions')
+    expect(calls.find((c) => c.key === 'POST /v1/variable-requests/estimate')?.body).toEqual({ query_sql: submitted.query_sql })
   })
 
-  it('lists every validation problem the server reports', async () => {
-    fakeApi({
-      'GET /v1/variable-requests/template': () => ({ json: { query_sql: 'SELECT 1' } }),
-      'POST /v1/variable-requests/estimate': () => ({
-        status: 400,
-        json: { message: 'the query is not valid', details: ['only one statement is allowed', 'the query must filter on {block_from:UInt32} and {block_to:UInt32}'] },
-      }),
-    })
+  it('says what is missing before submitting an incomplete build', async () => {
+    const calls = fakeApi(modalRoutes())
     render(<ProposeVariableModal onClose={vi.fn()} onSubmitted={vi.fn()} />)
-    await waitFor(() => expect(screen.getByRole('textbox', { name: /Query/ })).toHaveValue('SELECT 1'))
+    await screen.findByRole('button', { name: 'Add condition' })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Column name' }), { target: { value: 'x_flag' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Label' }), { target: { value: 'X' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Submit request' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Add at least one condition')
+    expect(calls.some((c) => c.key === 'POST /v1/variable-requests')).toBe(false)
+  })
+
+  it('carries a built query to the SQL editor, where picking a column inserts its name', async () => {
+    fakeApi(modalRoutes())
+    render(<ProposeVariableModal onClose={vi.fn()} onSubmitted={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a condition on: transactions.gas' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Condition operator' }), { target: { value: 'gt' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Value for gas' }), { target: { value: '100000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit as SQL' }))
+
+    const editor = screen.getByRole('textbox', { name: 'Query SQL' }) as HTMLTextAreaElement
+    expect(editor.value).toContain('toUInt8(gas > 100000) AS value')
+    editor.setSelectionRange(0, 0)
+    fireEvent.click(screen.getByRole('button', { name: 'Insert: transactions.block_number' }))
+    expect(editor.value.startsWith('block_numberSELECT')).toBe(true)
+  })
+
+  it('lists every validation problem the server reports for hand-written SQL', async () => {
+    fakeApi(
+      modalRoutes({
+        'POST /v1/variable-requests/estimate': () => ({
+          status: 400,
+          json: { message: 'the query is not valid', details: ['only one statement is allowed', 'the query must filter on {block_from:UInt32} and {block_to:UInt32}'] },
+        }),
+      }),
+    )
+    render(<ProposeVariableModal onClose={vi.fn()} onSubmitted={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'SQL' }))
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Query SQL' })).toHaveValue('SELECT block_number, transaction_index, 1 AS value'))
     fireEvent.click(screen.getByRole('button', { name: 'Estimate cost' }))
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('the query is not valid')
     expect(within(alert).getAllByRole('listitem')).toHaveLength(2)
+  })
+
+  it('filters the column list by name or meaning', async () => {
+    fakeApi(modalRoutes())
+    render(<ProposeVariableModal onClose={vi.fn()} onSubmitted={vi.fn()} />)
+    await screen.findByRole('button', { name: 'Add a condition on: transactions.value' })
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search columns' }), { target: { value: 'gas limit' } })
+    expect(screen.getByRole('button', { name: 'Add a condition on: transactions.gas' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add a condition on: transactions.value' })).not.toBeInTheDocument()
   })
 })
 

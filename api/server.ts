@@ -59,6 +59,7 @@ import {
   type AuthConfig,
   type JwksFetcher,
 } from './auth.ts'
+import { loadSchema, type SchemaTable } from './schemaCatalog.ts'
 import { ClickHouseStore, type AppStore, type AppUser, type RequestStatus, type VariableRequest } from './store.ts'
 import {
   approveRequest,
@@ -482,6 +483,14 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   }
 
   app.get('/v1/variable-requests/template', async () => ({ query_sql: QUERY_TEMPLATE }))
+
+  /** Tables and columns researchers can build from, for the query builder and column browser. */
+  let schemaCache: SchemaTable[] | null = null
+  app.get('/v1/variable-requests/schema', async (req) => {
+    await requireUser(req)
+    schemaCache ??= await loadSchema(client)
+    return { tables: schemaCache }
+  })
 
   app.post<{ Body: RequestDraft }>('/v1/variable-requests/estimate', async (req) => {
     await requireUser(req)

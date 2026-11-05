@@ -125,13 +125,13 @@ catalog variable's values with the catalog embedded.
 ## 4. Tests
 
 ```bash
-npm test                              # 566 tests, incl. API and provider contract
+npm test                              # 599 tests, incl. API and provider contract
 npm run test:api                      # API only
 cd pipeline && python -m pytest       # 52 planning, cost-guard and parsing tests
 ```
 
 The API integration tests need ClickHouse from step 2, and the variable tests also need
-the computed variables. Without them 57 of the 566 report as
+the computed variables. Without them 57 of the 599 report as
 **skipped**, never as passed — an earlier version of them passed vacuously against a live
 server and hid a real bug, so they now resolve availability at module load and run in the
 `node` environment (jsdom cannot reach a local port).

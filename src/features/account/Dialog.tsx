@@ -7,8 +7,9 @@ interface DialogProps {
   /**
    * `modal`: centered card. `panel`: right-hand slide-over, like the data dictionary.
    * `auth`: centered card whose content lays itself out — no title bar, a floating close.
+   * `wide`: a large centered workspace, for forms with a side panel.
    */
-  variant?: 'modal' | 'panel' | 'auth'
+  variant?: 'modal' | 'panel' | 'auth' | 'wide'
   children: ReactNode
   footer?: ReactNode
 }

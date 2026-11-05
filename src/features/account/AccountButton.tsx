@@ -79,7 +79,7 @@ export function AccountButton({ onVariableAdded }: { onVariableAdded: () => void
           <button
             type="button"
             role="menuitem"
-            className="acct-menu__item"
+            className="acct-menu__item acct-menu__item--danger"
             onClick={() => {
               setMenuOpen(false)
               account.signOut()

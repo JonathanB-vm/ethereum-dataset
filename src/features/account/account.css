@@ -189,6 +189,20 @@
   outline: none;
 }
 
+/* Sign out: set apart from the menu's other actions and colored with the theme's red. */
+.acct-menu__item--danger {
+  margin-top: 4px;
+  color: var(--negative);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+}
+
+.acct-menu__item--danger:hover,
+.acct-menu__item--danger:focus-visible {
+  color: var(--negative);
+  background: color-mix(in srgb, var(--negative) 12%, transparent);
+}
+
 .acct-signin {
   color: var(--text);
   border-color: var(--border-strong);

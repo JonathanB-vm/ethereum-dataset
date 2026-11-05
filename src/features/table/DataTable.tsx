@@ -70,6 +70,15 @@ export function DataTable({
     [tab, tokens, variableValues],
   )
 
+  // TanStack caches each row's cell values by column id and only rebuilds rows when `data`
+  // changes identity — new column defs alone don't invalidate that cache. Normalized
+  // Quantity and the research variables read lookups that load separately from the rows
+  // (with an API, the variable values always arrive after them), so without a fresh array
+  // the table would keep serving the empty values it cached on first render. A shallow
+  // copy is cheap, and happens only when a lookup actually changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- tokens/variableValues are the point: they force the rebuild
+  const data = useMemo(() => records.slice(), [records, tokens, variableValues])
+
   const [sortingState, setSortingState] = useState<SortingState>([])
   const [paginationState, setPaginationState] = useState<PaginationState>({
     pageIndex: 0,
@@ -132,7 +141,7 @@ export function DataTable({
   const expanded = tabChanged ? {} : expandedState
 
   const table = useReactTable({
-    data: records,
+    data,
     columns,
     state: { sorting, pagination, columnFilters, globalFilter, expanded },
     onSortingChange: setSortingState,

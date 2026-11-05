@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   COLUMNS,
   LOADED_COLUMNS,
-  VARIABLE_COLUMNS,
   getColumnMeta,
   type ColumnMeta,
   type DictionaryField,
@@ -454,7 +453,7 @@ function FullDictionary({ records, variableValues }: { records: EthRecord[]; var
     () =>
       new Map<DictionaryField, ColumnStats>([
         ...LOADED_COLUMNS.map((c) => [c.field, computeColumnStats(records, c.field)] as const),
-        ...VARIABLE_COLUMNS.map(
+        ...variableValues.columns.map(
           (c) => [c.field, computeColumnStats(records, c.field, (r) => variableValues.get(c.field, r))] as const,
         ),
       ]),
@@ -479,7 +478,8 @@ function FullDictionary({ records, variableValues }: { records: EthRecord[]; var
         })}
       </div>
       {visibleSources(sourceFilter).map((source) => {
-        const fields = COLUMNS.filter((c) => c.source === source)
+        // Variables come from the live catalog, which can hold ones approved after this build.
+        const fields = source === 'variable' ? variableValues.columns : COLUMNS.filter((c) => c.source === source)
         if (fields.length === 0) return null
         return (
           <section key={source} className="dictionary-group">

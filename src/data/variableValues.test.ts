@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EMPTY_VARIABLE_VALUES, parseVariableValues, variableValuesProvider } from './variableValues'
+import { getColumnMeta } from './dictionary'
 
 const PAYLOAD = {
   schemaVersion: 1,
@@ -37,10 +38,44 @@ describe('parseVariableValues', () => {
     expect(v.get('simple_transaction', at(100, 0))).toBeNull()
   })
 
-  it('returns the empty lookup for any unrecognised shape', () => {
+  it('returns an empty lookup, still listing the registry variables, for any unrecognised shape', () => {
     expect(parseVariableValues(null)).toBe(EMPTY_VARIABLE_VALUES)
-    expect(parseVariableValues({})).toBe(EMPTY_VARIABLE_VALUES)
-    expect(parseVariableValues({ blocks: [1], txIndexes: [] })).toBe(EMPTY_VARIABLE_VALUES)
+    for (const bad of [{}, { blocks: [1], txIndexes: [] }]) {
+      const v = parseVariableValues(bad)
+      expect(v.size).toBe(0)
+      expect(v.columns.map((c) => c.field)).toEqual(['simple_transaction', 'from_high_user'])
+    }
+  })
+
+  it('without a catalog in the payload, shows the registry variables', () => {
+    expect(parseVariableValues(PAYLOAD).columns.map((c) => c.field)).toEqual(['simple_transaction', 'from_high_user'])
+  })
+
+  it('with a catalog in the payload (an API), shows its variables — including newly approved ones', () => {
+    const v = parseVariableValues({
+      ...PAYLOAD,
+      versions: { ...PAYLOAD.versions, big_sender: 1 },
+      values: { ...PAYLOAD.values, big_sender: [1, 1, 0] },
+      variables: [
+        { id: 'simple_transaction', label: 'Simple Transaction', version: 1, created_by: { id: 'nir-chemaya', name: 'Nir Chemaya' }, created_at: '2026-11-04' },
+        { id: 'big_sender', label: 'Big Sender', version: 1, value_type: 'flag', created_by: { id: 'u2', name: 'Ada Lovelace' }, created_at: '2026-11-05', tags: ['value'] },
+        { label: 'missing an id' },
+      ],
+    })
+    expect(v.columns.map((c) => c.field)).toEqual(['simple_transaction', 'big_sender'])
+    expect(v.get('big_sender', at(100, 1))).toBe(1)
+    // Not in this catalog, so not shown, even though its values are in the payload.
+    expect(v.get('from_high_user', at(101, 0))).toBeNull()
+    // Registered, so headers, chips and the dictionary can describe it.
+    expect(getColumnMeta('big_sender')?.variable?.createdBy.name).toBe('Ada Lovelace')
+  })
+
+  it('gives a number-valued variable a range filter instead of a checkbox list', () => {
+    const v = parseVariableValues({
+      ...PAYLOAD,
+      variables: [{ id: 'tx_count', label: 'Tx count', version: 1, value_type: 'number', created_by: { id: 'u', name: 'U' } }],
+    })
+    expect(v.columns[0].kind).toBe('number')
   })
 })
 

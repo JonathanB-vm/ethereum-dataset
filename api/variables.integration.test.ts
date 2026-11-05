@@ -81,12 +81,15 @@ describe('ClickHouse formulas agree with the JS reference', () => {
     }
   })
 
+  // The catalog also holds variables approved through requests — including the one the
+  // request integration test adds while this file runs in parallel — so this checks that
+  // every registry variable is present and correctly attributed, not that nothing else is.
   itLive('mirrors the registry in the eth.variables catalog', async () => {
     const rows = await client.query<{ id: string; created_by: string; tags: string[] }>({
       sql: 'SELECT id, created_by, tags FROM variables FINAL ORDER BY id',
     })
-    expect(rows.map((r) => r.id).sort()).toEqual(VARIABLES.map((v) => v.id).sort())
-    for (const r of rows) expect(r.created_by).toBe('nir-chemaya')
+    expect(rows.map((r) => r.id)).toEqual(expect.arrayContaining(VARIABLES.map((v) => v.id)))
+    for (const v of VARIABLES) expect(rows.find((r) => r.id === v.id)?.created_by).toBe(v.created_by)
   })
 })
 

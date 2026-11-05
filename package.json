@@ -11,11 +11,12 @@
     "data:tokens": "node scripts/prepare-tokens.mjs tokens.csv",
     "data:variables": "node scripts/prepare-variables.mjs",
     "variables:compute": "node pipeline/variables/compute.ts",
+    "db:research-user": "node --env-file-if-exists=.env.local pipeline/clickhouse/research_user.ts",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "api": "node api/server.ts",
+    "api": "node --env-file-if-exists=.env.local api/server.ts",
     "test:api": "vitest run api"
   },
   "dependencies": {

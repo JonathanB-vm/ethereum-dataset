@@ -28,8 +28,8 @@ export interface User {
  */
 export type VariableGrain = 'transaction'
 
-/** `flag`: 0 or 1. Room is left for counts and ratios once a variable needs one. */
-export type VariableValueType = 'flag'
+/** `flag`: 0 or 1. `number`: any numeric value (a count, a ratio, an amount). */
+export type VariableValueType = 'flag' | 'number'
 
 export interface VariableDefinition {
   /** Also the column name. snake_case, unique, and never one of the dataset's own fields. */
@@ -60,7 +60,7 @@ const ID_PATTERN = /^[a-z][a-z0-9_]*$/
 const TAG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const GRAINS: readonly string[] = ['transaction']
-const VALUE_TYPES: readonly string[] = ['flag']
+const VALUE_TYPES: readonly string[] = ['flag', 'number']
 
 /**
  * Every problem with a registry, as human-readable strings; empty means valid. Returns

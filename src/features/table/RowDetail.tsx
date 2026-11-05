@@ -12,7 +12,7 @@ import {
 import { lookupToken, type TokenRegistry } from '../../data/tokenRegistry'
 import { EMPTY_VARIABLE_VALUES, type VariableValues } from '../../data/variableValues'
 import { CalldataField } from './CalldataField'
-import { GROUPS, HUMAN_UNIT } from './rowDetailFields'
+import { GROUPS, HUMAN_UNIT, withVariableGroup } from './rowDetailFields'
 
 interface RowDetailProps {
   record: EthRecord
@@ -58,7 +58,7 @@ function rawString(value: unknown): string | null {
 export function RowDetail({ record, tokens, variableValues = EMPTY_VARIABLE_VALUES }: RowDetailProps) {
   return (
     <div className="row-detail">
-      {GROUPS.map((group) => (
+      {withVariableGroup(GROUPS, variableValues.columns.map((c) => c.field)).map((group) => (
         <section key={group.title} className="row-detail__group">
           <h3 className="row-detail__group-title">{group.title}</h3>
           <div className="row-detail__grid">

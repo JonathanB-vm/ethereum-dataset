@@ -103,18 +103,35 @@ curl 'http://localhost:3001/v1/transactions?block_from=25534200&block_to=2553420
 ```
 
 Configuration is environment-only: `CLICKHOUSE_URL`, `CLICKHOUSE_DB`, `CLICKHOUSE_USER`,
-`CLICKHOUSE_PASSWORD`, `PORT`, `DATASET_RELEASE`.
+`CLICKHOUSE_PASSWORD`, `PORT`, `DATASET_RELEASE`. For sign-in and variable requests, also
+set `GOOGLE_CLIENT_ID`, `SESSION_SECRET`, `ADMIN_EMAILS`, `RESEARCH_CLICKHOUSE_USER`,
+`RESEARCH_CLICKHOUSE_PASSWORD` and, locally only, `AUTH_DEV_LOGIN=1`. Create the research
+user first with `npm run db:research-user`. `npm run api` also reads a gitignored
+`.env.local`.
+
+Researcher variable requests (see the main README):
+
+```bash
+curl -c jar -X POST localhost:3001/v1/auth/dev -H 'Content-Type: application/json' -d '{"email":"you@example.com"}'
+curl -b jar -X POST localhost:3001/v1/variable-requests/estimate -H 'Content-Type: application/json' \
+  -d '{"query_sql":"SELECT block_number, transaction_index, toUInt8(gas > 100000) AS value FROM transactions WHERE block_number >= {block_from:UInt32} AND block_number <= {block_to:UInt32}"}'
+curl -b jar localhost:3001/v1/variable-requests
+```
+
+`POST /v1/variable-requests` submits a request. `POST /v1/variable-requests/:id/approve`
+and `/reject` are admin only. `GET /v1/variables/values?block_from=&block_to=` serves every
+catalog variable's values with the catalog embedded.
 
 ## 4. Tests
 
 ```bash
-npm test                              # 489 tests, incl. API and provider contract
+npm test                              # 566 tests, incl. API and provider contract
 npm run test:api                      # API only
 cd pipeline && python -m pytest       # 52 planning, cost-guard and parsing tests
 ```
 
 The API integration tests need ClickHouse from step 2, and the variable tests also need
-the computed variables. Without them 52 of the 489 report as
+the computed variables. Without them 57 of the 566 report as
 **skipped**, never as passed — an earlier version of them passed vacuously against a live
 server and hid a real bug, so they now resolve availability at module load and run in the
 `node` environment (jsdom cannot reach a local port).

@@ -9,7 +9,6 @@ import { initials } from '../../../registry/registry'
 import {
   getColumnMeta,
   LOADED_COLUMNS,
-  VARIABLE_COLUMNS,
   type ColumnMeta,
   type DictionaryField,
 } from '../../data/dictionary'
@@ -426,7 +425,7 @@ const transactionColumns: ColumnDef<EthRecord>[] = [
  * creator's initials (see `header()`).
  */
 function variableColumns(tab: TabId, values: VariableValues): ColumnDef<EthRecord>[] {
-  return VARIABLE_COLUMNS.map((meta) =>
+  return values.columns.map((meta) =>
     helper.accessor((r) => values.get(meta.field, r) ?? undefined, {
       id: meta.field,
       header: header(tab, meta.field),

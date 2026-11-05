@@ -1,7 +1,12 @@
 /**
  * Computes every research variable in `registry/variables.json` for the CSV build.
  *
- *   node scripts/prepare-variables.mjs [--rows <rows.csv.gz>] [--out <file>]
+ *   node scripts/prepare-variables.mjs [--rows <rows.csv.gz>] [--out <file>] [--from-clickhouse]
+ *
+ * By default it computes the registry's variables with the JS reference implementations.
+ * With `--from-clickhouse` it instead exports every active catalog variable — including
+ * researcher variables approved through the API — from eth.tx_variable_values, with the
+ * catalog's metadata embedded, so a rebuild and redeploy puts them on the static site.
  *
  * Reads the already-prepared `public/data/rows.csv.gz` (not the 2.19 GB source), so adding
  * a variable never means re-running `data:prep`. Writes
@@ -26,7 +31,7 @@ function parseArgs(argv) {
     if (i === -1) return fallback
     const value = argv[i + 1]
     if (value === undefined || value.startsWith('--')) {
-      console.error('usage: node scripts/prepare-variables.mjs [--rows <rows.csv.gz>] [--out <file>]')
+      console.error('usage: node scripts/prepare-variables.mjs [--rows <rows.csv.gz>] [--out <file>] [--from-clickhouse]')
       process.exit(1)
     }
     return value
@@ -35,11 +40,12 @@ function parseArgs(argv) {
   return {
     rows: flag('--rows', path.join(dataDir, 'rows.csv.gz')),
     out: flag('--out', path.join(dataDir, 'variable-values.json.gz')),
+    fromClickHouse: argv.includes('--from-clickhouse'),
   }
 }
 
 async function main() {
-  const { rows: rowsPath, out } = parseArgs(process.argv)
+  const { rows: rowsPath, out, fromClickHouse } = parseArgs(process.argv)
 
   const errors = validateRegistry(VARIABLES, USERS)
   if (errors.length > 0) {
@@ -63,19 +69,41 @@ async function main() {
     })
   }
 
-  const packed = computeVariableValues(rows, VARIABLES)
-  const payload = { schemaVersion: 1, ...packed }
+  const payload = fromClickHouse ? await exportFromClickHouse(rows) : { schemaVersion: 1, ...computeVariableValues(rows, VARIABLES) }
   await fsp.writeFile(out, zlib.gzipSync(Buffer.from(JSON.stringify(payload), 'utf8'), { level: 9 }))
 
-  console.log(`transactions    ${packed.blocks.length.toLocaleString('en-US')}`)
-  for (const v of VARIABLES) {
-    const ones = packed.values[v.id].reduce((n, x) => n + x, 0)
+  const total = payload.blocks.length
+  console.log(`transactions    ${total.toLocaleString('en-US')}`)
+  for (const [id, column] of Object.entries(payload.values)) {
+    const ones = column.filter((x) => x === 1).length
+    const zeros = column.filter((x) => x === 0).length
     console.log(
-      `${v.id.padEnd(22)}  1: ${ones.toLocaleString('en-US').padStart(7)}   ` +
-        `0: ${(packed.blocks.length - ones).toLocaleString('en-US').padStart(7)}`,
+      `${id.padEnd(22)}  1: ${ones.toLocaleString('en-US').padStart(7)}   ` +
+        `0: ${zeros.toLocaleString('en-US').padStart(7)}`,
     )
   }
   console.log(`written to      ${out} (${(fs.statSync(out).size / 1024).toFixed(0)} KB)`)
+}
+
+/**
+ * Every active catalog variable's values for the rows' block range, in the same columnar
+ * shape the API serves, catalog metadata included.
+ */
+async function exportFromClickHouse(rows) {
+  const { ClickHouseClient } = await import('../api/clickhouse.ts')
+  const { ClickHouseStore } = await import('../api/store.ts')
+  const { buildVariableValues, columnarValues, mergeCatalog } = await import('../api/variables.ts')
+  const client = new ClickHouseClient({ settings: { max_execution_time: 600 } })
+  const store = new ClickHouseStore(client)
+  const defs = mergeCatalog(await store.listCatalog(), await store.listUsers())
+  let from = Infinity
+  let to = -Infinity
+  for (const r of rows) {
+    if (r.block_number < from) from = r.block_number
+    if (r.block_number > to) to = r.block_number
+  }
+  const values = await client.query(buildVariableValues(defs.map((d) => d.id), from, to))
+  return columnarValues(values, defs)
 }
 
 main().catch((err) => {

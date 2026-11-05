@@ -34,12 +34,42 @@ import {
 import {
   blockSpan,
   buildVariableValues,
+  columnarValues,
+  filterCatalog,
   listVariables,
+  mergeCatalog,
   mergeVariableValues,
   parseVariablesParam,
-  toResource,
+  type VariableResource,
 } from './variables.ts'
-import { getVariable, USERS } from '../registry/registry.ts'
+import { USERS } from '../registry/registry.ts'
+import {
+  AuthError,
+  authConfigFromEnv,
+  clearedSessionCookie,
+  googleJwksFetcher,
+  parseCookies,
+  publicUser,
+  SESSION_COOKIE,
+  sessionCookie,
+  signSession,
+  upsertSignedInUser,
+  verifyGoogleIdToken,
+  verifySession,
+  type AuthConfig,
+  type JwksFetcher,
+} from './auth.ts'
+import { ClickHouseStore, type AppStore, type AppUser, type RequestStatus, type VariableRequest } from './store.ts'
+import {
+  approveRequest,
+  createRequest,
+  estimateDraft,
+  QUERY_TEMPLATE,
+  rejectRequest,
+  RequestError,
+  type RequestContext,
+  type RequestDraft,
+} from './variableRequests.ts'
 
 /** Blockscout's anonymous default; the row cap and timeout are the real protection. */
 export const RATE_LIMIT_ANONYMOUS = 300
@@ -48,6 +78,26 @@ export const RATE_LIMIT_KEYED = 600
 export interface ServerOptions {
   client?: ClickHouseClient
   release?: string
+  /** App data (users, requests, runs, catalog). Defaults to ClickHouse via `client`. */
+  store?: AppStore
+  auth?: AuthConfig
+  /** Google signing keys; injectable so tests can sign their own tokens. */
+  jwks?: JwksFetcher & { refresh?: () => void }
+  /** Range an approved variable is computed over; defaults to every loaded block. */
+  computeRange?: () => Promise<{ from: number; to: number }>
+  /**
+   * Connection for researcher-submitted SQL, as the restricted research user. Defaults to
+   * RESEARCH_CLICKHOUSE_USER / RESEARCH_CLICKHOUSE_PASSWORD; without them, variable
+   * requests are refused rather than run as the API's own user. `null` disables them.
+   */
+  researchClient?: ClickHouseClient | null
+}
+
+/** The research user's connection from the environment, or null if it is not configured. */
+export function researchClientFromEnv(env: NodeJS.ProcessEnv = process.env): ClickHouseClient | null {
+  const user = env.RESEARCH_CLICKHOUSE_USER
+  if (!user) return null
+  return new ClickHouseClient({ user, password: env.RESEARCH_CLICKHOUSE_PASSWORD ?? '' })
 }
 
 interface PageQuery {
@@ -66,6 +116,11 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
   const app = Fastify({ logger: false })
   const client = options.client ?? new ClickHouseClient()
   const release = options.release ?? process.env.DATASET_RELEASE ?? 'dev'
+  const store = options.store ?? new ClickHouseStore(client)
+  const auth = options.auth ?? authConfigFromEnv()
+  const jwks = options.jwks ?? googleJwksFetcher()
+  const researchClient = options.researchClient !== undefined ? options.researchClient : researchClientFromEnv()
+  const requests: RequestContext = { store, client, researchClient, computeRange: options.computeRange }
 
   /** Cached briefly so every request does not re-query the head block. */
   let headCache: { block: number; timestamp: string; at: number } | null = null
@@ -98,6 +153,14 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     if (error instanceof InvalidCursorError) {
       return reply.code(400).send({ error: 'bad_cursor', message: error.message })
     }
+    if (error instanceof AuthError) {
+      return reply.code(error.statusCode).send({ error: 'auth', message: error.message })
+    }
+    if (error instanceof RequestError) {
+      return reply
+        .code(error.statusCode)
+        .send({ error: 'bad_request', message: error.message, details: error.details })
+    }
     if (error instanceof ClickHouseError) {
       // Never leak the upstream query text to the caller.
       return reply.code(502).send({ error: 'upstream', message: 'query failed' })
@@ -127,6 +190,13 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     }
   }
 
+  /** `?variables=` validated against the live catalog, which includes approved requests. */
+  async function variableIdsFrom(raw: string | undefined): Promise<string[]> {
+    if (raw == null || raw.trim() === '') return []
+    const all = await cachedCatalog()
+    return parseVariablesParam(raw, (id) => all.some((v) => v.id === id))
+  }
+
   /** Serve one page and attach the cursor for the next. */
   async function servePage(
     table: Table,
@@ -138,7 +208,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     const limit = resolveLimit(query.limit, keyed)
     const cursor = query.cursor ? decodeCursor(query.cursor) : undefined
     const dir = query.sort === 'desc' ? 'desc' : 'asc'
-    const variableIds = parseVariablesParam(query.variables)
+    const variableIds = await variableIdsFrom(query.variables)
 
     const built =
       scope.kind === 'address'
@@ -179,7 +249,7 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     }
     const limit = resolveLimit(req.query.limit, hasKey(req))
     const cursor = req.query.cursor ? decodeCursor(req.query.cursor) : undefined
-    const variableIds = parseVariablesParam(req.query.variables)
+    const variableIds = await variableIdsFrom(req.query.variables)
     const rows = await client.query<Record<string, unknown>>(
       buildRecordsPage(scope.from, scope.to, limit, cursor),
     )
@@ -266,28 +336,193 @@ export function buildServer(options: ServerOptions = {}): FastifyInstance {
     return { kind: 'text', value: hit.value }
   })
 
+  // ---------------------------------------------------------------------------
+  // Research-variable catalog
+  // ---------------------------------------------------------------------------
+
   /**
-   * The research-variable catalog. Read from the registry, so it needs no database.
+   * The registry seed merged with approved variables in the database. Falls back to the
+   * seed alone when the database is unreachable, so the catalog never disappears.
+   */
+  async function catalog(): Promise<VariableResource[]> {
+    try {
+      const [entries, users] = await Promise.all([store.listCatalog(), store.listUsers()])
+      return mergeCatalog(entries, users)
+    } catch {
+      return listVariables({})
+    }
+  }
+
+  /** Short-lived, so a fresh approval shows up within seconds but a page burst is one read. */
+  let catalogCache: { at: number; value: VariableResource[] } | null = null
+  async function cachedCatalog(): Promise<VariableResource[]> {
+    if (catalogCache && Date.now() - catalogCache.at < 5_000) return catalogCache.value
+    catalogCache = { at: Date.now(), value: await catalog() }
+    return catalogCache.value
+  }
+
+  /**
    * Optional filters: `tag` (exact), `q` (substring of id, label, description or tags),
    * `created_by` (user id).
    */
   app.get<{ Querystring: { tag?: string; q?: string; created_by?: string } }>(
     '/v1/variables',
     async (req, reply) => {
-      reply.header('Cache-Control', 'public, max-age=300')
-      return { variables: listVariables(req.query) }
+      reply.header('Cache-Control', 'public, max-age=30')
+      return { variables: filterCatalog(await cachedCatalog(), req.query) }
     },
   )
 
-  app.get<{ Params: { id: string } }>('/v1/variables/:id', async (req, reply) => {
-    const variable = getVariable(req.params.id)
-    if (!variable) return reply.code(404).send({ error: 'not_found', message: 'no such variable' })
-    reply.header('Cache-Control', 'public, max-age=300')
-    return toResource(variable)
+  /**
+   * Every catalog variable's values over a block range, in the same columnar shape as
+   * public/data/variable-values.json.gz — catalog metadata included — so the explorer
+   * loads both through one parser.
+   */
+  app.get<{ Querystring: PageQuery & { ids?: string } }>('/v1/variables/values', async (req) => {
+    const scope = parseScope(req.query)
+    if (scope.kind !== 'range') throw new ScopeError('variable values require a block range')
+    const all = await cachedCatalog()
+    const ids = req.query.ids ? parseVariablesParam(req.query.ids, (id) => all.some((v) => v.id === id)) : all.map((v) => v.id)
+    const defs = all.filter((v) => ids.includes(v.id))
+    const rows = ids.length
+      ? await client.query<{ variable_id: string; block_number: number; transaction_index: number; value: number }>(
+          buildVariableValues(ids, scope.from, scope.to),
+        )
+      : []
+    return columnarValues(rows, defs)
   })
 
-  /** Demo users (registry/users.json). There is no authentication behind them yet. */
-  app.get('/v1/users', async () => ({ users: USERS }))
+  app.get<{ Params: { id: string } }>('/v1/variables/:id', async (req, reply) => {
+    const variable = (await cachedCatalog()).find((v) => v.id === req.params.id)
+    if (!variable) return reply.code(404).send({ error: 'not_found', message: 'no such variable' })
+    reply.header('Cache-Control', 'public, max-age=30')
+    return { ...variable, runs: await store.listRuns(variable.id).catch(() => []) }
+  })
+
+  /** Users, from the users table; the registry's demo list if the table is empty or unreachable. */
+  app.get('/v1/users', async () => {
+    const users = await store.listUsers().catch(() => [])
+    return {
+      users: users.length
+        ? users.map((u) => ({ id: u.id, name: u.name, role: u.role }))
+        : USERS,
+    }
+  })
+
+  // ---------------------------------------------------------------------------
+  // Auth
+  // ---------------------------------------------------------------------------
+
+  const secureCookies = process.env.NODE_ENV === 'production'
+
+  async function currentUser(req: { headers: Record<string, string | string[] | undefined> }) {
+    const cookie = req.headers.cookie
+    const uid = verifySession(parseCookies(Array.isArray(cookie) ? cookie[0] : cookie)[SESSION_COOKIE], auth.sessionSecret)
+    return uid ? store.getUser(uid) : null
+  }
+
+  async function requireUser(req: { headers: Record<string, string | string[] | undefined> }) {
+    const user = await currentUser(req)
+    if (!user) throw new AuthError('sign in to do this')
+    return user
+  }
+
+  async function requireAdmin(req: { headers: Record<string, string | string[] | undefined> }) {
+    const user = await requireUser(req)
+    if (user.role !== 'admin') throw new AuthError('only an admin can do this', 403)
+    return user
+  }
+
+  function signIn(reply: FastifyReply, user: AppUser) {
+    reply.header('Set-Cookie', sessionCookie(signSession(user.id, auth.sessionSecret), secureCookies))
+    return { user: publicUser(user) }
+  }
+
+  /** Public auth settings the browser needs to render the sign-in button. */
+  app.get('/v1/auth/config', async () => ({
+    google_client_id: auth.googleClientId || null,
+    dev_login: auth.devLogin,
+  }))
+
+  app.post<{ Body: { credential?: string } }>('/v1/auth/google', async (req, reply) => {
+    const credential = req.body?.credential
+    if (!credential) throw new AuthError('missing Google credential', 400)
+    const claims = await verifyGoogleIdToken(credential, { clientId: auth.googleClientId, jwks })
+    return signIn(reply, await upsertSignedInUser(store, claims, auth.adminEmails))
+  })
+
+  /** Local development and tests only: sign in as any email without Google. */
+  app.post<{ Body: { email?: string; name?: string } }>('/v1/auth/dev', async (req, reply) => {
+    if (!auth.devLogin) return reply.code(404).send({ error: 'not_found', message: 'not found' })
+    const email = req.body?.email?.trim()
+    if (!email) throw new AuthError('email is required', 400)
+    const identity = { sub: '', email, emailVerified: true, name: req.body?.name?.trim() || email, picture: '' }
+    return signIn(reply, await upsertSignedInUser(store, identity, auth.adminEmails))
+  })
+
+  app.get('/v1/auth/me', async (req) => {
+    const user = await currentUser(req)
+    return { user: user ? publicUser(user) : null }
+  })
+
+  app.post('/v1/auth/logout', async (_req, reply) => {
+    reply.header('Set-Cookie', clearedSessionCookie())
+    return { ok: true }
+  })
+
+  // ---------------------------------------------------------------------------
+  // Variable requests
+  // ---------------------------------------------------------------------------
+
+  /** The request as the API returns it, with requester and reviewer names resolved. */
+  async function requestResource(r: VariableRequest) {
+    const users = await store.listUsers()
+    const name = (id: string) => (id ? (users.find((u) => u.id === id)?.name ?? id) : null)
+    return { ...r, requestedByName: name(r.requestedBy), reviewedByName: name(r.reviewedBy) }
+  }
+
+  app.get('/v1/variable-requests/template', async () => ({ query_sql: QUERY_TEMPLATE }))
+
+  app.post<{ Body: RequestDraft }>('/v1/variable-requests/estimate', async (req) => {
+    await requireUser(req)
+    return { estimate: await estimateDraft(requests, req.body ?? ({} as RequestDraft)) }
+  })
+
+  app.post<{ Body: RequestDraft }>('/v1/variable-requests', async (req, reply) => {
+    const user = await requireUser(req)
+    const created = await createRequest(requests, user, req.body ?? ({} as RequestDraft))
+    return reply.code(201).send({ request: await requestResource(created) })
+  })
+
+  /** A researcher sees their own requests; an admin sees everyone's. */
+  app.get<{ Querystring: { status?: RequestStatus; mine?: string } }>('/v1/variable-requests', async (req) => {
+    const user = await requireUser(req)
+    const mineOnly = user.role !== 'admin' || req.query.mine === '1'
+    const list = await store.listRequests({
+      requestedBy: mineOnly ? user.id : undefined,
+      status: req.query.status,
+    })
+    return { requests: await Promise.all(list.map(requestResource)) }
+  })
+
+  app.post<{ Params: { id: string }; Body: { note?: string } }>(
+    '/v1/variable-requests/:id/approve',
+    async (req, reply) => {
+      const admin = await requireAdmin(req)
+      const { request, done } = await approveRequest(requests, admin, req.params.id, req.body?.note ?? '')
+      // The computation continues after the response; the UI polls the request's status.
+      done.then(() => (catalogCache = null)).catch(() => {})
+      return reply.code(202).send({ request: await requestResource(request) })
+    },
+  )
+
+  app.post<{ Params: { id: string }; Body: { note?: string } }>(
+    '/v1/variable-requests/:id/reject',
+    async (req) => {
+      const admin = await requireAdmin(req)
+      return { request: await requestResource(await rejectRequest(requests, admin, req.params.id, req.body?.note ?? '')) }
+    },
+  )
 
   app.get('/health', async () => ({ ok: await client.ping() }))
 

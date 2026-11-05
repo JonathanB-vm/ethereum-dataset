@@ -18,6 +18,8 @@ import { GlobalSearchInput } from './components/GlobalSearchInput'
 import { DictionaryButton, DictionaryPanelProvider } from './features/dictionary/DictionaryPanel'
 import { exitDuration } from './theme/motion'
 import { useDebouncedValue } from './hooks/useDebouncedValue'
+import { AccountButton } from './features/account/AccountButton'
+import { API_URL, variableValuesUrl } from './features/account/accountApi'
 
 interface LoadState {
   status: 'loading' | 'error' | 'ready'
@@ -181,8 +183,11 @@ function App() {
   }, [])
 
   // Research-variable values: the same enhancement-not-dependency contract as the token
-  // registry above, so a missing artifact leaves the variable columns showing dashes.
+  // registry above, so a missing artifact leaves the variable columns showing dashes. The
+  // static build reads the committed artifact once; with an API (below) the values and the
+  // live catalog come from it instead, and reload when an approval adds a column.
   useEffect(() => {
+    if (API_URL) return
     let cancelled = false
     variableValuesProvider()
       .load()
@@ -193,6 +198,10 @@ function App() {
       cancelled = true
     }
   }, [])
+
+  // Bumped when an approved request finishes computing, so its column appears without a reload.
+  const [variablesToken, setVariablesToken] = useState(0)
+  const handleVariableAdded = useCallback(() => setVariablesToken((t) => t + 1), [])
 
   const handleRetry = useCallback(() => setRetryToken((t) => t + 1), [])
 
@@ -212,6 +221,25 @@ function App() {
     () => (state.result ? computeStats(state.result.records) : null),
     [state.result],
   )
+
+  // API mode: values plus the live catalog for exactly the loaded block range. If the API
+  // can't answer, fall back to the committed artifact, so the registry's columns keep their
+  // values rather than going blank.
+  const blockMin = stats?.blockMin ?? null
+  const blockMax = stats?.blockMax ?? null
+  useEffect(() => {
+    if (!API_URL || blockMin == null || blockMax == null) return
+    let cancelled = false
+    variableValuesProvider(variableValuesUrl(blockMin, blockMax))
+      .load()
+      .then((values) => (values.size > 0 ? values : variableValuesProvider().load()))
+      .then((values) => {
+        if (!cancelled) setVariableValues(values)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [blockMin, blockMax, variablesToken])
 
   // Tab counts are always derived from the loaded records, never hard-coded.
   const tabCounts = useMemo<Record<TabId, number>>(() => {
@@ -255,6 +283,7 @@ function App() {
             <>
               <GlobalSearchInput ref={searchInputRef} value={globalFilter} onChange={setGlobalFilter} />
               <DictionaryButton />
+              {API_URL && <AccountButton onVariableAdded={handleVariableAdded} />}
             </>
           )}
         </Header>

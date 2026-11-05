@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DataTable } from './DataTable'
 import { DictionaryPanelProvider } from '../dictionary/DictionaryPanel'
 import { EMPTY_TOKEN_REGISTRY } from '../../data/tokenRegistry'
-import { parseVariableValues } from '../../data/variableValues'
+import { EMPTY_VARIABLE_VALUES, parseVariableValues } from '../../data/variableValues'
 import { mk } from './__fixtures__/tableHarness'
 import type { BlockAxisEntry } from '../../data/types'
 
@@ -54,6 +54,28 @@ function columnCells(label: string): string[] {
 }
 
 describe('research variable columns', () => {
+  // Regression: TanStack caches cell values per row, so values that arrive after the rows
+  // (always the case with an API) used to leave the cached dashes on screen.
+  it('fill in when the values arrive after the table first rendered', () => {
+    const table = (values: typeof VALUES) => (
+      <DictionaryPanelProvider records={RECORDS}>
+        <DataTable
+          records={RECORDS}
+          tab="transfers"
+          tokens={EMPTY_TOKEN_REGISTRY}
+          variableValues={values}
+          blockAxis={AXIS}
+          globalFilter=""
+          onGlobalFilterChange={vi.fn()}
+        />
+      </DictionaryPanelProvider>
+    )
+    const { rerender } = render(table(EMPTY_VARIABLE_VALUES))
+    expect(columnCells('Simple Transaction')).toEqual(['–', '–', '–', '–'])
+    rerender(table(VALUES))
+    expect(columnCells('Simple Transaction')).toEqual(['1', '0', '0', '–'])
+  })
+
   it('render one value per transaction on every row, and a dash when not computed', () => {
     renderTable()
     expect(columnCells('Simple Transaction')).toEqual(['1', '0', '0', '–'])

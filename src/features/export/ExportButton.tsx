@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Table } from '@tanstack/react-table'
-import { LOADED_COLUMNS, VARIABLE_COLUMNS } from '../../data/dictionary'
+import { LOADED_COLUMNS } from '../../data/dictionary'
 import type { EthRecord } from '../../data/types'
 import type { TabId } from '../table/Tabs'
 import { buildCsv, downloadCsv, type DerivedCells } from './exportCsv'
@@ -82,7 +82,7 @@ export function ExportButton({
         return decimals == null ? '' : (normalizeQuantity(r.quantity, decimals) ?? '')
       },
     }
-    for (const meta of VARIABLE_COLUMNS) {
+    for (const meta of variableValues.columns) {
       derived[meta.field] = (r: EthRecord) => {
         const v = variableValues.get(meta.field, r)
         return v == null ? '' : String(v)

@@ -158,6 +158,86 @@ To add a variable:
 Changing a formula means bumping `version`. The explorer drops values computed under an
 older version instead of showing them.
 
+### Researcher requests, users and sign-in
+
+Researchers can propose variables themselves. Nothing they submit is computed at scale
+until an admin approves it. This lives entirely behind the API; the static site deployed
+to Cloudflare Pages shows none of it (see **Running it locally** below).
+
+1. **Sign in.** Google sign-in sets a session cookie. Anyone can browse without signing in;
+   any Google account can submit requests. Admins come from `ADMIN_EMAILS`.
+2. **Propose.** The *Propose a variable* modal asks for a column name, label, description,
+   tags, a value type (flag or number), and one `SELECT` returning `block_number`,
+   `transaction_index` and `value`, filtered on `{block_from:UInt32}` and
+   `{block_to:UInt32}`. The server wraps it into the insert itself, so a request can never
+   write anything.
+3. **Estimate.** *Estimate cost* checks the query, then runs it twice on small samples (50
+   and 100 blocks). Those runs are read-only (`readonly=2`) and capped on time, rows read
+   and memory. From what ClickHouse reports it projects time, rows and bytes read, peak
+   memory, output rows and storage, both for the loaded data and for a full year (2.63 M
+   blocks), and grades the cost light, moderate or heavy. A cost dominated by a fixed part,
+   such as a lookback window, is flagged as approximate.
+4. **Review.** Admins see the queue with each request's SQL and estimate. *Approve &
+   compute* runs it over the loaded range, logs the run, and adds the column to the
+   catalog, credited to the researcher and recording the approving admin. The column
+   appears in the explorer without a reload. *Reject* records a note.
+
+Safety. The boundary is a **dedicated ClickHouse user** that every piece of researcher
+SQL runs as (`npm run db:research-user`). ClickHouse enforces its grants whatever the SQL
+says:
+- SELECT on the public dataset tables only, and INSERT only into `tx_variable_values`
+- no access to `users`, `variable_requests`, `variable_runs` or system tables, so a
+  query can't read private data or leak it through an error message
+- no SOURCES grants, so `url()`, `file()`, `s3()`, `remote()` and the like fail with
+  ACCESS_DENIED. Note that `readonly=2` alone does **not** block them; verified.
+
+Request features refuse to run (503) unless that user is configured; they never fall back
+to the API's own user. Layered on top of the grants:
+- static checks on tokenized SQL: one SELECT/WITH statement, and none of those table
+  functions, even hidden inside string literals or quoted identifiers. These give early,
+  clear messages.
+- `readonly=2` plus caps on time, rows read and memory for every run before approval
+- a human admin reading the SQL and its measured cost
+
+Where it lives:
+- **Tables:** `eth.users`, `eth.variable_requests` and `eth.variable_runs`. `eth.variables`
+  gains `request_id`, `approved_by`, `approved_at` and `status`. All are low-volume
+  ReplacingMergeTree tables in ClickHouse for now.
+- **Code:** all access goes through `api/store.ts`, so moving app data to Postgres for the
+  real site is one new class. The other pieces are `api/auth.ts`,
+  `api/variableRequests.ts`, `api/estimate.ts`, and `src/features/account/` for the UI.
+
+**Running it locally:**
+
+Put the API's settings in a gitignored `.env.local`, which `npm run api` and
+`npm run db:research-user` read:
+
+```bash
+AUTH_DEV_LOGIN=1
+ADMIN_EMAILS=you@example.com
+SESSION_SECRET=<random hex>
+RESEARCH_CLICKHOUSE_USER=eth_research
+RESEARCH_CLICKHOUSE_PASSWORD=<random, 12+ characters>
+```
+
+```bash
+# ClickHouse with the schema applied and the sample loaded (pipeline/README.md, step 2), then
+npm run db:research-user                                     # the restricted research user
+npm run variables:compute -- --from 25534200 --to 25534299   # also seeds users
+npm run api
+VITE_API_URL=/api npm run dev                                # proxies /api to :3001
+```
+
+- If port 3001 is taken, add `PORT=3002` to `.env.local` and start Vite with
+  `API_PROXY_TARGET=http://localhost:3002`.
+- `AUTH_DEV_LOGIN=1` adds a *Sign in* form that accepts any email; never enable it on a
+  public server.
+- For real Google sign-in, create an OAuth *Web* client in Google Cloud Console with
+  authorized origin `http://localhost:5173`, and start the API with
+  `GOOGLE_CLIENT_ID=<id>`.
+- `npm run data:variables -- --from-clickhouse` exports every active catalog variable,
+  approved ones included, into the static artifact for a redeploy.
+
 ## Architecture
 
 ```
@@ -212,12 +292,13 @@ and does not prove.
 
 ## Testing
 
-`npm test` runs 489 tests across 44 Vitest suites covering the dictionary, the variable
-registry and reference implementations, CSV
+`npm test` runs 566 tests across 50 Vitest suites covering the dictionary, the variable
+registry and reference implementations, sign-in and sessions, request validation and
+cost estimation, the account UI, CSV
 parsing and row validation, gzip decoding, the dataset-prep helpers, the calldata
 provider, BigInt transforms, dataset/column stats, filter functions, debounced search,
 pagination ranges, column definitions, CSV export, and the API query layer and paged
-provider seam. 52 of them need a local ClickHouse and report as *skipped* without one.
+provider seam. 57 of them need a local ClickHouse and report as *skipped* without one.
 
 `cd pipeline && python -m pytest` runs 52 more covering ingest planning, the BigQuery
 cost guard, and the repack step's value parsing.

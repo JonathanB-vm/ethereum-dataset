@@ -3,10 +3,11 @@
  *
  *   npm run variables:compute -- --from <block> --to <block> [--only <id>[,<id>...]]
  *
- * Validates registry/variables.json, upserts it into the eth.variables catalog, then runs
- * each variable's formula file over the block range. Formulas insert into
- * eth.tx_variable_values, whose ReplacingMergeTree key makes a rerun of the same range
- * replace rows instead of duplicating them.
+ * Validates the registry, seeds registry/users.json into eth.users, upserts
+ * registry/variables.json into the eth.variables catalog, then runs each variable's
+ * formula file over the block range, logging every run to eth.variable_runs. Formulas
+ * insert into eth.tx_variable_values, whose ReplacingMergeTree key makes a rerun of the
+ * same range replace rows instead of duplicating them.
  *
  * Connection settings are the API's: CLICKHOUSE_URL, CLICKHOUSE_DB, CLICKHOUSE_USER,
  * CLICKHOUSE_PASSWORD.
@@ -15,7 +16,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import crypto from 'node:crypto'
 import { ClickHouseClient } from '../../api/clickhouse.ts'
+import { chDateTime, ClickHouseStore } from '../../api/store.ts'
 import {
   USERS,
   VARIABLES,
@@ -80,13 +83,57 @@ async function main() {
 
   // A long range can take longer than the API's 30 s read cap.
   const client = new ClickHouseClient({ settings: { max_execution_time: 3600 } })
+  const store = new ClickHouseStore(client)
+
+  // Seed users: created once, never overwritten — a seeded user who has since signed in
+  // (and gained an email, a Google link or a role) keeps what they gained.
+  let seeded = 0
+  for (const u of USERS) {
+    if (await store.getUser(u.id)) continue
+    await store.saveUser({ id: u.id, googleSub: '', email: '', name: u.name, pictureUrl: '', role: 'researcher', createdAt: chDateTime() })
+    seeded++
+  }
+  console.log(`users           ${seeded} seeded (${USERS.length - seeded} already present)`)
+
   await client.query({ sql: buildCatalogUpsert(VARIABLES) })
   console.log(`catalog         ${VARIABLES.length} variables upserted`)
 
   for (const v of selected) {
     const sql = fs.readFileSync(path.join(REPO_ROOT, v.formula.sql), 'utf8')
     const started = Date.now()
-    await client.query({ sql, params: { block_from: from, block_to: to, version: v.version } })
+    const run = {
+      id: crypto.randomUUID(),
+      variableId: v.id,
+      version: v.version,
+      requestId: '',
+      blockFrom: from,
+      blockTo: to,
+      rowsWritten: 0,
+      readRows: 0,
+      readBytes: 0,
+      elapsedMs: 0,
+      status: 'running' as const,
+      error: '',
+      startedAt: chDateTime(),
+      finishedAt: null,
+    }
+    await store.saveRun(run)
+    try {
+      const { summary } = await client.queryWithSummary({ sql, params: { block_from: from, block_to: to, version: v.version } })
+      await store.saveRun({
+        ...run,
+        status: 'completed',
+        rowsWritten: summary.writtenRows,
+        readRows: summary.readRows,
+        readBytes: summary.readBytes,
+        elapsedMs: Date.now() - started,
+        finishedAt: chDateTime(),
+      })
+    } catch (err) {
+      const error = err instanceof Error ? err.message.split('\n')[0] : String(err)
+      await store.saveRun({ ...run, status: 'failed', error, elapsedMs: Date.now() - started, finishedAt: chDateTime() })
+      throw err
+    }
     const row = await client.queryOne<{ rows: string; ones: string }>({
       sql:
         'SELECT count() AS rows, countIf(value = 1) AS ones FROM eth.tx_variable_values FINAL ' +

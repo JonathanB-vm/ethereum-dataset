@@ -92,23 +92,42 @@ export const COLUMNS: ColumnMeta[] = [
   { field: 'v_tx', label: 'Sig v', description: 'ECDSA signature v.', source: 'transactions', kind: 'hex', availability: 'loaded' },
   { field: 'y_parity_tx', label: 'Sig y-parity', description: 'ECDSA signature y_parity.', source: 'transactions', kind: 'hex', availability: 'loaded' },
   { field: 'is_token_transfer', label: 'Token Transfer?', description: 'Indicates whether the row represents a token transfer or a non-token transaction.', source: 'derived', kind: 'boolean', availability: 'loaded' },
-  ...VARIABLES.map((v): ColumnMeta => ({
+  ...VARIABLES.map((v) => variableColumnMeta({ ...v, created_by: resolveCreator(v) })),
+]
+
+/** A variable definition with its creator resolved — the registry's, or the API catalog's. */
+export interface VariableDefinitionLike {
+  id: string
+  label: string
+  description?: string
+  tags?: string[]
+  created_by: User
+  created_at: string
+  version: number
+  value_type?: string
+  formula?: { summary?: string }
+}
+
+/** The dictionary entry for a research variable. */
+export function variableColumnMeta(v: VariableDefinitionLike): ColumnMeta {
+  return {
     field: variableField(v.id),
     label: v.label,
     description: v.description ?? '',
     source: 'variable',
-    // A 0/1 flag filters as a two-option checkbox list, like the boolean columns.
-    kind: 'enum',
+    // A 0/1 flag filters as a two-option checkbox list, like the boolean columns; any
+    // other numeric variable gets a min/max range filter.
+    kind: v.value_type === 'number' ? 'number' : 'enum',
     availability: 'variable',
     variable: {
-      createdBy: resolveCreator(v),
+      createdBy: v.created_by,
       createdAt: v.created_at,
       tags: v.tags ?? [],
-      formula: v.formula.summary,
+      formula: v.formula?.summary ?? '',
       version: v.version,
     },
-  })),
-]
+  }
+}
 
 /**
  * The 34 columns actually present on an `EthRecord`. This — not `COLUMNS` — is what the
@@ -119,11 +138,28 @@ export const LOADED_COLUMNS: LoadedColumnMeta[] = COLUMNS.filter(
   (c): c is LoadedColumnMeta => c.availability === 'loaded',
 )
 
-/** Every research variable's dictionary entry, in registry order. */
+/**
+ * The registry's research variables — what the explorer shows before (or without) a live
+ * catalog. With an API, the catalog that arrives with the values replaces this; see
+ * `VariableValues.columns` and `registerVariableColumns`.
+ */
 export const VARIABLE_COLUMNS: ColumnMeta[] = COLUMNS.filter((c) => c.availability === 'variable')
 
 const byField = new Map(COLUMNS.map((c) => [c.field as string, c]))
 
 export function getColumnMeta(field: string): ColumnMeta | undefined {
   return byField.get(field)
+}
+
+/**
+ * Makes variables from a live catalog resolvable through `getColumnMeta`, so headers,
+ * filter chips and the dictionary describe a variable approved after this build. An entry
+ * never shadows a dataset field.
+ */
+export function registerVariableColumns(columns: ColumnMeta[]): void {
+  for (const c of columns) {
+    const existing = byField.get(c.field)
+    if (existing && existing.availability !== 'variable') continue
+    byField.set(c.field, c)
+  }
 }

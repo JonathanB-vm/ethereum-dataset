@@ -12,6 +12,8 @@ import type { EthRecord } from '../../data/types'
  * share.
  */
 
+const VARIABLE_GROUP_TITLE = 'Research Variables'
+
 export interface FieldGroup {
   title: string
   fields: DictionaryField[]
@@ -48,10 +50,15 @@ export const GROUPS: FieldGroup[] = [
     ],
   },
   {
-    title: 'Research Variables',
+    title: VARIABLE_GROUP_TITLE,
     fields: VARIABLE_COLUMNS.map((c) => c.field),
   },
 ]
+
+/** `GROUPS` with the research-variable group swapped for the live catalog's variables. */
+export function withVariableGroup(groups: FieldGroup[], fields: DictionaryField[]): FieldGroup[] {
+  return groups.map((g) => (g.title === VARIABLE_GROUP_TITLE ? { ...g, fields } : g))
+}
 
 // Human-readable/display-unit conversion, keyed by field — only the fields the brief calls
 // out (ETH for value_lossless_tx, Gwei for gas_price_tx/max fees). `value_tx` shares

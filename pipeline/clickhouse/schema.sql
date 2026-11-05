@@ -311,3 +311,81 @@ CREATE TABLE IF NOT EXISTS eth.tx_variable_values
 ENGINE = ReplacingMergeTree(computed_at)
 PARTITION BY intDiv(block_number, 1000000)
 ORDER BY (variable_id, block_number, transaction_index);
+
+-- Provenance for catalog entries that came through a researcher request. Added with
+-- ADD COLUMN IF NOT EXISTS so an install created before these existed migrates in place.
+ALTER TABLE eth.variables ADD COLUMN IF NOT EXISTS request_id  String DEFAULT '';
+ALTER TABLE eth.variables ADD COLUMN IF NOT EXISTS approved_by LowCardinality(String) DEFAULT '';
+ALTER TABLE eth.variables ADD COLUMN IF NOT EXISTS approved_at Nullable(DateTime);
+ALTER TABLE eth.variables ADD COLUMN IF NOT EXISTS status      LowCardinality(String) DEFAULT 'active';
+
+-- ---------------------------------------------------------------------------
+-- App data: users and researcher variable requests.
+--
+-- Low-volume, update-in-place records kept here so the stack needs no second database
+-- yet. Every table is ReplacingMergeTree(updated_at): an update is a new row version and
+-- reads use FINAL. All access goes through api/store.ts, so moving these to Postgres when
+-- the site gets a real backend is one new store implementation.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS eth.users
+(
+    id           String,
+    google_sub   String DEFAULT '',
+    email        String DEFAULT '',
+    name         String,
+    picture_url  String DEFAULT '',
+    role         LowCardinality(String) DEFAULT 'researcher',   -- researcher | admin
+    created_at   DateTime,
+    updated_at   DateTime64(3)
+)
+ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY id;
+
+-- A researcher's proposal for a new variable. Nothing runs at full scale until an admin
+-- approves; `estimate` holds the measured sample-run cost as JSON (see api/estimate.ts).
+CREATE TABLE IF NOT EXISTS eth.variable_requests
+(
+    id            String,
+    variable_id   String,
+    label         String,
+    description   String DEFAULT '',
+    tags          Array(LowCardinality(String)),
+    value_type    LowCardinality(String),                 -- flag | number
+    grain         LowCardinality(String),                 -- transaction
+    query_sql     String,
+    requested_by  String,
+    status        LowCardinality(String),                 -- pending | rejected | running | completed | failed
+    estimate      String DEFAULT '',
+    review_note   String DEFAULT '',
+    reviewed_by   String DEFAULT '',
+    reviewed_at   Nullable(DateTime),
+    error         String DEFAULT '',
+    created_at    DateTime,
+    updated_at    DateTime64(3)
+)
+ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY id;
+
+-- One row per computation of a variable over a block range: the audit trail of what ran,
+-- for whom, at what cost. Written by approvals and by pipeline/variables/compute.ts.
+CREATE TABLE IF NOT EXISTS eth.variable_runs
+(
+    id            String,
+    variable_id   String,
+    version       UInt32,
+    request_id    String DEFAULT '',
+    block_from    UInt32,
+    block_to      UInt32,
+    rows_written  UInt64 DEFAULT 0,
+    read_rows     UInt64 DEFAULT 0,
+    read_bytes    UInt64 DEFAULT 0,
+    elapsed_ms    UInt64 DEFAULT 0,
+    status        LowCardinality(String),                 -- running | completed | failed
+    error         String DEFAULT '',
+    started_at    DateTime,
+    finished_at   Nullable(DateTime),
+    updated_at    DateTime64(3)
+)
+ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (variable_id, started_at, id);
